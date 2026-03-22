@@ -57,6 +57,29 @@ PART_02_REQUIRED_MARKERS = [
     "FAIL-SAFE CHECK",
 ]
 
+FINAL_PART_TITLES = {
+    2: "АНАЛИЗ ОБЛАСТИ ПРАВА",
+    3: "БЛОКИ ПОИСКА СФЕР ПРАВА",
+    4: "ПОИСК ПО ОРГАНАМ ВЛАСТИ",
+    5: "СЛОЙНОСТЬ",
+    6: "ФИЛЬТР",
+    7: "ФИЛЬТР БЕЗ ПОВТОРЕНИЙ",
+    8: "ФИЛЬТР БЕЗ ПОВТОРЕНИЙ ФЕДЕРАЛЬНЫХ ДОКУМЕНТОВ",
+    9: "ДЕЛЬТА-АУДИТ",
+    10: "РАСШИРЕННЫЙ МИНИ-КОНСПЕКТ",
+    11: "ПЕРЕЧЕНЬ ПРАКТИЧЕСКИХ ЗАДАНИЙ ПО ЗАДАННОЙ ТЕМЕ",
+}
+
+PROMINENT_INNER_HEADINGS = {
+    "ТЕМА:",
+    "АНАЛИЗ ОБЛАСТИ ПРАВА",
+    "АНАЛИЗ-КОДЕКСЫ И БАЗОВЫЕ АКТЫ",
+    "A. РЕГУЛЯТОРНОЕ ЯДРО",
+    "B. ОПОРНЫЕ ДОКУМЕНТЫ",
+    "КАРАНТИН",
+    "FAIL-SAFE CHECK",
+}
+
 PART_02_FORBIDDEN_PUBLIC_BLOCKS_RE = re.compile(
     r"(?m)^\s*\*{0,2}(?:I|II|III|IV|V|VI|VII|VIII|IX|X|XI|XII|XIII|XIV|XV|XVI|XVII|XVIII|XIX|XX|XXI|XXII|XXIII|XXIV|XXV|XXVI|XXVII|XXVIII|XXIX|XXX|XXXI|XXXII|XXXIII|XXXIV|XXXV|XXXVI|XXXVII)(?:\.|\s*[—-])"
 )
@@ -211,6 +234,28 @@ def safe_slug(value: str) -> str:
     value = re.sub(r"[^\w\-.А-Яа-яЁё]+", "-", value, flags=re.UNICODE)
     value = re.sub(r"-{2,}", "-", value)
     return value.strip("-.") or "topic"
+
+
+def safe_filename_component(value: str) -> str:
+    cleaned = re.sub(r'[<>:"/\\|?*]+', "", value)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip().rstrip(".")
+    return cleaned or "document"
+
+
+def shorten_subtopic_title(title: str, max_length: int = 46) -> str:
+    cleaned = safe_filename_component(clean_markdown_text(title))
+    if len(cleaned) <= max_length:
+        return cleaned
+    truncated = cleaned[: max_length + 1]
+    if " " in truncated:
+        truncated = truncated[: truncated.rfind(" ")]
+    truncated = truncated.rstrip(" .,:;!-")
+    return truncated or cleaned[:max_length].rstrip(" .,:;!-")
+
+
+def build_published_output_filename(entry: OutlineEntry, suffix: str) -> str:
+    short_title = shorten_subtopic_title(entry.title)
+    return f"{entry.item_id}. {short_title}{suffix}"
 
 
 def write_text(path: Path, content: str) -> None:
@@ -1818,55 +1863,56 @@ def build_final_output_contract(run_workspace: SubtopicRunWorkspace) -> dict[str
 def build_final_skeleton_markdown(run_workspace: SubtopicRunWorkspace) -> str:
     subtopic_line = run_workspace.subtopic_entry.line
     lines = [
-        f"**ТЕМА: {subtopic_line}**",
+        f"# {subtopic_line}",
         "",
-        "АНАЛИЗ ОБЛАСТИ ПРАВА.",
+        f"## ЧАСТЬ 2. {FINAL_PART_TITLES[2]}",
+        "",
+        "ТЕМА:",
+        f"{subtopic_line}",
+        "",
+        "АНАЛИЗ ОБЛАСТИ ПРАВА",
         "[Заполняется из результата по Части 2.]",
         "",
-        "АНАЛИЗ-КОДЕКСЫ И БАЗОВЫЕ АКТЫ:",
+        "АНАЛИЗ-КОДЕКСЫ И БАЗОВЫЕ АКТЫ",
         "[Заполняется из результата по Части 2.]",
         "",
         "A. РЕГУЛЯТОРНОЕ ЯДРО",
-        "",
         "[Заполняется из результата по Части 2.]",
         "",
         "B. ОПОРНЫЕ ДОКУМЕНТЫ",
-        "",
         "[Заполняется из результата по Части 2.]",
         "",
         "КАРАНТИН",
-        "",
         "[Заполняется из результата по Части 2.]",
         "",
         "FAIL-SAFE CHECK",
-        "",
         "[Заполняется из результата по Части 2.]",
         "",
-        "ЧАСТЬ 3. ДОПОЛНИТЕЛЬНЫЙ АЛГОРИТМ ОХВАТА",
+        f"## ЧАСТЬ 3. {FINAL_PART_TITLES[3]}",
         "[Сюда встраивается результат по Части 3 без переформатирования.]",
         "",
-        "ЧАСТЬ 4. ДОПОЛНИТЕЛЬНЫЙ АЛГОРИТМ ОХВАТА — ПРОДОЛЖЕНИЕ",
+        f"## ЧАСТЬ 4. {FINAL_PART_TITLES[4]}",
         "[Сюда встраивается результат по Части 4 без переформатирования.]",
         "",
-        "ЧАСТЬ 5. СЛОЙНОСТЬ",
+        f"## ЧАСТЬ 5. {FINAL_PART_TITLES[5]}",
         "[Сюда встраивается результат по Части 5 без переформатирования.]",
         "",
-        "ЧАСТЬ 6. ТРИ ФИЛЬТРА",
+        f"## ЧАСТЬ 6. {FINAL_PART_TITLES[6]}",
         "[Сюда встраивается результат по Части 6 без переформатирования.]",
         "",
-        "ЧАСТЬ 7. ДОПОЛНИТЕЛЬНЫЕ ДОКУМЕНТЫ БЕЗ ПОВТОРОВ",
+        f"## ЧАСТЬ 7. {FINAL_PART_TITLES[7]}",
         "[Сюда встраивается результат по Части 7 без переформатирования.]",
         "",
-        "ЧАСТЬ 8. ФЕДЕРАЛЬНЫЙ УРОВЕНЬ",
+        f"## ЧАСТЬ 8. {FINAL_PART_TITLES[8]}",
         "[Сюда встраивается результат по Части 8 без переформатирования.]",
         "",
-        "ЧАСТЬ 9. ДЕЛЬТА-АУДИТ",
+        f"## ЧАСТЬ 9. {FINAL_PART_TITLES[9]}",
         "[Сюда встраивается результат по Части 9 без переформатирования.]",
         "",
-        "ЧАСТЬ 10. МИНИ-КОНСПЕКТ",
+        f"## ЧАСТЬ 10. {FINAL_PART_TITLES[10]}",
         "[Сюда встраивается результат по Части 10.]",
         "",
-        "ЧАСТЬ 11. ПЕРЕЧЕНЬ ПРАКТИЧЕСКИХ ЗАДАНИЙ",
+        f"## ЧАСТЬ 11. {FINAL_PART_TITLES[11]}",
         "[Сюда встраивается результат по Части 11.]",
         "",
     ]
@@ -1934,8 +1980,8 @@ def build_subtopic_run_workspace_for_dir(
         web_plan_dir=web_plan_dir,
         order_path=order_path,
         packet_path=packet_path,
-        final_md_target=theme_workspace.final_md_dir / f"{subtopic_id}.md",
-        final_docx_target=theme_workspace.final_docx_dir / f"{subtopic_id}.docx",
+        final_md_target=theme_workspace.final_md_dir / build_published_output_filename(subtopic_entry, ".md"),
+        final_docx_target=theme_workspace.final_docx_dir / build_published_output_filename(subtopic_entry, ".docx"),
         order_text=order_text,
         packet_text=packet_text,
         intro_block=intro_block,
@@ -2952,12 +2998,12 @@ def assemble_subtopic_final(run_workspace: SubtopicRunWorkspace, publish: bool) 
             skipped_stub_parts.append(part.number)
             continue
         included_parts.append(part.number)
-        assembled_blocks.append(content)
+        assembled_blocks.append(render_final_part_block(part.number, content))
 
     if 2 not in included_parts:
         raise RuntimeError("Part 2 output is missing or still a stub; final assembly cannot start")
 
-    final_markdown = "\n\n".join(block.strip() for block in assembled_blocks if block.strip()).rstrip() + "\n"
+    final_markdown = assemble_final_markdown_document(run_workspace, assembled_blocks)
     assembled_md = run_workspace.final_dir / "final.assembled.md"
     assembled_docx = run_workspace.final_dir / "final.assembled.docx"
     write_text(assembled_md, final_markdown)
@@ -3501,9 +3547,134 @@ def markdown_lines_from_output(
     return lines
 
 
-def paragraph_element(text: str) -> ET.Element:
+def normalize_label_only_code_blocks(content: str) -> str:
+    labels = ("Каноническая строка поиска:", "URL1:", "URL2:")
+    normalized = content
+    for label in labels:
+        normalized = re.sub(
+            rf"```(?:text)?\s*\n{re.escape(label)}\s*\n```\s*\n?",
+            f"{label}\n",
+            normalized,
+            flags=re.I,
+        )
+    return normalized
+
+
+def is_structural_heading(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return False
+    if stripped.startswith("ЧАСТЬ "):
+        return True
+    if stripped.startswith("ТЕМА:"):
+        return True
+    if stripped in PROMINENT_INNER_HEADINGS:
+        return True
+    if re.match(r"^[IVXLCDM]+\.\s", stripped):
+        return True
+    return False
+
+
+def renumber_document_cards(content: str) -> str:
+    counters: dict[str, int] = {}
+    current_scope = "__global__"
+    result_lines: list[str] = []
+
+    for raw_line in content.splitlines():
+        stripped = raw_line.strip()
+        if is_structural_heading(stripped):
+            current_scope = stripped
+            counters.setdefault(current_scope, 0)
+            result_lines.append(raw_line)
+            continue
+        if re.match(r"^\d+\.\s+Вид документа:", stripped):
+            result_lines.append(raw_line)
+            continue
+        if stripped.startswith("Вид документа:"):
+            counters[current_scope] = counters.get(current_scope, 0) + 1
+            indent = raw_line[: len(raw_line) - len(raw_line.lstrip())]
+            result_lines.append(
+                f"{indent}{counters[current_scope]}. {stripped}"
+            )
+            continue
+        result_lines.append(raw_line)
+
+    return "\n".join(result_lines)
+
+
+def normalize_final_part_content(content: str) -> str:
+    normalized = normalize_label_only_code_blocks(content.strip())
+    normalized = renumber_document_cards(normalized)
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized).strip()
+    return normalized
+
+
+def render_final_part_block(part_number: int, content: str) -> str:
+    title = FINAL_PART_TITLES.get(part_number, f"ЧАСТЬ {part_number}")
+    normalized = normalize_final_part_content(content)
+    return f"## ЧАСТЬ {part_number}. {title}\n\n{normalized}"
+
+
+def assemble_final_markdown_document(
+    run_workspace: SubtopicRunWorkspace,
+    assembled_blocks: list[str],
+) -> str:
+    lines = [f"# {run_workspace.subtopic_entry.line}", ""]
+    for block in assembled_blocks:
+        block = block.strip()
+        if not block:
+            continue
+        lines.append(block)
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def paragraph_element(
+    text: str,
+    *,
+    style: str = "body",
+) -> ET.Element:
     paragraph = ET.Element(f"{{{W_NS}}}p")
+    p_pr = ET.SubElement(paragraph, f"{{{W_NS}}}pPr")
+    spacing = ET.SubElement(p_pr, f"{{{W_NS}}}spacing")
+
+    if style == "title":
+        spacing.set(f"{{{W_NS}}}before", "0")
+        spacing.set(f"{{{W_NS}}}after", "120")
+    elif style in {"section", "subsection"}:
+        spacing.set(f"{{{W_NS}}}before", "120")
+        spacing.set(f"{{{W_NS}}}after", "80")
+    elif style in {"code", "code-spacer"}:
+        spacing.set(f"{{{W_NS}}}before", "0")
+        spacing.set(f"{{{W_NS}}}after", "0")
+        ind = ET.SubElement(p_pr, f"{{{W_NS}}}ind")
+        ind.set(f"{{{W_NS}}}left", "240")
+        ind.set(f"{{{W_NS}}}right", "240")
+        shd = ET.SubElement(p_pr, f"{{{W_NS}}}shd")
+        shd.set(f"{{{W_NS}}}val", "clear")
+        shd.set(f"{{{W_NS}}}color", "auto")
+        shd.set(f"{{{W_NS}}}fill", "F3F3F3")
+    else:
+        spacing.set(f"{{{W_NS}}}before", "0")
+        spacing.set(f"{{{W_NS}}}after", "40")
+
     run = ET.SubElement(paragraph, f"{{{W_NS}}}r")
+    r_pr = ET.SubElement(run, f"{{{W_NS}}}rPr")
+    if style == "title":
+        ET.SubElement(r_pr, f"{{{W_NS}}}b")
+        size = ET.SubElement(r_pr, f"{{{W_NS}}}sz")
+        size.set(f"{{{W_NS}}}val", "30")
+    elif style in {"section", "subsection"}:
+        ET.SubElement(r_pr, f"{{{W_NS}}}b")
+        size = ET.SubElement(r_pr, f"{{{W_NS}}}sz")
+        size.set(f"{{{W_NS}}}val", "24")
+    elif style in {"code", "code-spacer"}:
+        fonts = ET.SubElement(r_pr, f"{{{W_NS}}}rFonts")
+        fonts.set(f"{{{W_NS}}}ascii", "Courier New")
+        fonts.set(f"{{{W_NS}}}hAnsi", "Courier New")
+        fonts.set(f"{{{W_NS}}}cs", "Courier New")
+        size = ET.SubElement(r_pr, f"{{{W_NS}}}sz")
+        size.set(f"{{{W_NS}}}val", "20")
     text_el = ET.SubElement(run, f"{{{W_NS}}}t")
     if text.startswith(" ") or text.endswith(" ") or "  " in text:
         text_el.set(f"{{{XML_NS}}}space", "preserve")
@@ -3511,15 +3682,44 @@ def paragraph_element(text: str) -> ET.Element:
     return paragraph
 
 
-def markdown_to_docx_lines(content: str) -> list[str]:
-    lines: list[str] = []
+def build_docx_paragraph_specs(content: str) -> list[tuple[str, str]]:
+    specs: list[tuple[str, str]] = []
+    in_code_block = False
+    previous_blank = False
+
     for raw_line in content.splitlines():
         line = raw_line.rstrip()
-        if line.startswith("#"):
-            line = line.lstrip("#").strip()
-        line = line.replace("**", "")
-        lines.append(line)
-    return lines
+        stripped = line.strip()
+
+        if stripped.startswith("```"):
+            in_code_block = not in_code_block
+            previous_blank = False
+            continue
+
+        if not in_code_block and stripped.startswith("#"):
+            level = len(stripped) - len(stripped.lstrip("#"))
+            text = stripped[level:].strip()
+            specs.append((text, "title" if level == 1 else "section"))
+            previous_blank = False
+            continue
+
+        if stripped == "":
+            if previous_blank:
+                continue
+            specs.append(("", "code-spacer" if in_code_block else "spacer"))
+            previous_blank = True
+            continue
+
+        text = line.replace("**", "")
+        if in_code_block:
+            specs.append((text, "code"))
+        elif is_structural_heading(stripped):
+            specs.append((text, "subsection"))
+        else:
+            specs.append((text, "body"))
+        previous_blank = False
+
+    return specs
 
 
 def overwrite_docx_document_xml(docx_path: Path, new_xml: bytes) -> None:
@@ -3554,7 +3754,10 @@ def replace_docx_body_with_text(template_path: Path, output_path: Path, content:
     if sect_pr is not None:
         insert_at = list(body).index(sect_pr)
 
-    new_paragraphs = [paragraph_element(line) for line in markdown_to_docx_lines(content)]
+    new_paragraphs = [
+        paragraph_element(text, style=style)
+        for text, style in build_docx_paragraph_specs(content)
+    ]
     for offset, paragraph in enumerate(new_paragraphs):
         body.insert(insert_at + offset, paragraph)
 
@@ -3577,12 +3780,13 @@ def append_markdown_to_docx(template_path: Path, output_path: Path, content: str
     if sect_pr is not None:
         insert_at = list(body).index(sect_pr)
 
-    new_paragraphs = []
-    new_paragraphs.append(paragraph_element(""))
-    new_paragraphs.append(paragraph_element("Сгенерированный результат"))
-    new_paragraphs.append(paragraph_element(""))
-    for line in markdown_to_docx_lines(content):
-        new_paragraphs.append(paragraph_element(line))
+    new_paragraphs = [
+        paragraph_element("", style="spacer"),
+        paragraph_element("Сгенерированный результат", style="section"),
+        paragraph_element("", style="spacer"),
+    ]
+    for text, style in build_docx_paragraph_specs(content):
+        new_paragraphs.append(paragraph_element(text, style=style))
 
     for offset, paragraph in enumerate(new_paragraphs):
         body.insert(insert_at + offset, paragraph)
