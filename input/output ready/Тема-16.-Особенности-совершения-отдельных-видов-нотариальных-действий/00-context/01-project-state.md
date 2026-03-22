@@ -59,10 +59,15 @@
   - переписывать готовые блоки заново не нужно, если они уже соответствуют принятому формату.
 - Для Части 2 теперь есть отдельный web-first слой:
   - `04-web-plan` создается автоматически при `run-subtopic`
-  - внутри лежат `00-operator-sequence`, `message-01`, `message-02`, `message-03`, `queries`, `source-cascade`, `part-02.research-pack`, `part-02.core-template`, `part-02.launch-packet`, `research-log`, `evidence`
+  - внутри лежат `00-operator-sequence`, `message-01`, `message-02`, `message-03`, `queries`, `source-cascade`, `part-02.research-pack`, `part-02.core-template`, `part-02.launch-packet`, `research-log`, `evidence`, `reasoning-layer`, `semantic-dedup`, `omission-audit`
   - в research pack фиксируется привязка тарифных подпунктов к базовому нотариальному действию и запрет смешивать самостоятельный тарифный разбор с базовой подтемой
-  - `part-02.launch-packet` = reusable файл для ручного запуска Части 2 в LLM без ручной склейки нескольких файлов
+  - `part-02.launch-packet` = более буквальный manual-like пакет для запуска Части 2 без лишнего пересказа агентом
   - `00-operator-sequence` и `message-01/02/03` = операторский слой, который убирает путаницу с GO/СТАРТ
+  - после захвата каждой части агент пересобирает динамические пакеты, чтобы следующий шаг видел уже накопленный контекст
+  - для Частей `6–11` создаются `04-web-plan\follow-up-parts\message.part-06.md` ... `message.part-11.md`
+  - для Частей `2–11` создаются `04-web-plan\reasoning-layer\part-02.reasoning.md` ... `part-11.reasoning.md`, чтобы LLM работала не только по структуре Приказа, но и по отдельному reasoning contract каждой стадии
+  - для Частей `5–8` создаются `04-web-plan\semantic-dedup\part-05.semantic-dedup.md` ... `part-08.semantic-dedup.md`, чтобы anti-repeat и фильтры понимали разницу между повтором в той же роли и допустимым повтором документа в новой роли
+  - для Частей `9–11` создаются `04-web-plan\omission-audit\part-09.omission-audit.md` ... `part-11.omission-audit.md`, чтобы дельта-аудит, мини-конспект и задания получали второй проход на пропуски по snapshot уже собранного покрытия
 - В приказе меняются только Раздел III и заголовки подтем в 11 Частях.
 - Готовые результаты сохраняются в `C:\Users\koper\OneDrive\Documents\New project\input\output ready`.
 - Финальный результат должен формироваться в `.md` и `.docx`.
@@ -119,6 +124,10 @@
   - `04-web-plan\focus.json`
   - `04-web-plan\part-02.core-template.md`
   - `04-web-plan\part-02.launch-packet.md`
+  - `04-web-plan\reasoning-layer\part-02.reasoning.md` ... `part-11.reasoning.md`
+  - `04-web-plan\semantic-dedup\part-05.semantic-dedup.md` ... `part-08.semantic-dedup.md`
+  - `04-web-plan\omission-audit\part-09.omission-audit.md` ... `part-11.omission-audit.md`
+  - `04-web-plan\follow-up-parts\message.part-06.md` ... `message.part-11.md`
 - Дополнительно зафиксировано:
   - локальная проблема с частично испорченным `docx`-артефактом при первом старте run устранена;
   - `prepare-part-02-web 16.2.1 --force` после восстановления run проходит штатно.
@@ -131,6 +140,7 @@
 - В `.md` ссылки остаются внутри fenced code blocks.
 - В `.docx` markdown-маркеры fenced code blocks не выводятся; остается только визуальный моноширинный блок ссылок.
 - Канонические финальные файлы публикуются по схеме `номер подтемы + усеченный заголовок`.
+- Модель верификации изменена: слабый `URL2` больше не выбрасывает реально найденный документ, если уже подтверждены существование, применимость, роль и `URL1`; в таком случае снижается статус доверия карточки, а не полнота корпуса.
 
 ## Как Использовать Этот Файл
 

@@ -87,7 +87,7 @@ python .\notary_agent.py run-subtopic 16.1.1
 - `01-stage-inputs` — вводный блок приказа и отдельные `part-01.md` ... `part-11.md`;
 - `02-stage-outputs` — stub-файлы под ответы по каждой Части;
 - `03-final` — локальный final-dir, `final.contract.json`, `final.skeleton.md` и `final.skeleton.docx`;
-- `04-web-plan` — web-first research pack для Части 2: `00-operator-sequence`, `message-01`, `message-02`, `message-03`, `queries`, `source-cascade`, `part-02.research-pack`, `part-02.core-template`, `part-02.launch-packet`, `research-log`, `evidence`;
+- `04-web-plan` — web-first, literal-context, reasoning-layer, semantic-dedup и omission-audit слой: `00-operator-sequence`, `message-01`, `message-02`, `message-03`, `queries`, `source-cascade`, `part-02.research-pack`, `part-02.core-template`, `part-02.launch-packet`, `research-log`, `evidence`, `follow-up-parts`, `reasoning-layer`, `semantic-dedup`, `omission-audit`;
 - `manifest.json` — статусы и режимы исполнения по всем 11 Частям.
 
 Если нужно явно указать основную тему, можно добавить `--theme-query`.
@@ -124,7 +124,19 @@ python .\notary_agent.py prepare-part-02-web 16.1.1 --force
 - `message-01.part-01.md` — первое сообщение в LLM;
 - `message-02.go.txt` — второе сообщение в LLM, содержит только `GO/СТАРТ`;
 - `message-03.part-02-launch-packet.md` — третье сообщение в LLM;
-- `research-log.jsonl` и `evidence\` — место под журнал поиска и доказательства.
+- `research-log.jsonl` и `evidence\` — место под журнал поиска и доказательства;
+- `reasoning-layer\part-02.reasoning.md` ... `part-11.reasoning.md` — reasoning-briefs по всему циклу Частей `2–11`.
+- `semantic-dedup\semantic-dedup.snapshot.json` и `part-05.semantic-dedup.md` ... `part-08.semantic-dedup.md` — смысловой дедуп по ролям документов для фильтров и anti-repeat слоя.
+- `omission-audit\omission-audit.snapshot.json` и `part-09.omission-audit.md` ... `part-11.omission-audit.md` — второй проход на пропуски и слабые места покрытия перед финальными доборами, конспектом и заданиями.
+
+Новый baseline усиления:
+
+- `part-02.launch-packet.md` теперь ближе к ручному сильному режиму: меньше пересказа, больше буквальной инструкции текущей Части;
+- после захвата каждой Части агент пересобирает динамические пакеты, чтобы следующая Часть видела уже накопленный контекст этой же подтемы;
+- для Частей `6–11` создаются `04-web-plan\follow-up-parts\message.part-06.md` ... `message.part-11.md`, чтобы follow-up этапы не стартовали с “сырых” stage-inputs без памяти о предыдущих ответах;
+- для Частей `2–11` создается `04-web-plan\reasoning-layer`, чтобы каждая стадия получала не только инструкцию Приказа, но и отдельный reasoning contract: как искать, что считать новой дельтой, где типичные пропуски и какие ошибки запрещены;
+- для Частей `5–8` создается `04-web-plan\semantic-dedup`, чтобы один и тот же документ не дублировался механически, если он уже найден в той же роли, но сохранялся при новой смысловой роли;
+- для Частей `9–11` создается `04-web-plan\omission-audit`, чтобы второй проход на пропуски шел по snapshot текущего покрытия, а не по памяти исполнителя.
 
 ### 1b. Автоматически выполнить Часть 1
 
@@ -165,6 +177,7 @@ python .\notary_agent.py capture-part-output 16.1.1 2 --clipboard
 
 - валидирует базовую структуру ядра (`ТЕМА`, `АНАЛИЗ ОБЛАСТИ ПРАВА`, `A`, `B`, `КАРАНТИН`, `FAIL-SAFE CHECK`);
 - проверяет, что URL-подобные токены не висят вне code-блоков;
+- не требует выкидывать документ только из-за слабого `URL2`: отсутствие полной читабельной второй ссылки теперь снижает статус верификации карточки, а не право документа на включение;
 - сохраняет результат в `02-stage-outputs\part-02.md`;
 - автоматически пересобирает `03-final\final.assembled.md/.docx`, чтобы ядро финального документа сразу обновилось.
 

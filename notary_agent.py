@@ -48,6 +48,150 @@ PART_EXECUTION_MODES = {
     11: "diary_tasks_only",
 }
 
+FOLLOWUP_LITERAL_PART_NUMBERS = (6, 7, 8, 9, 10, 11)
+REASONING_LAYER_PART_NUMBERS = tuple(range(2, 12))
+OMISSION_AUDIT_PART_NUMBERS = (9, 10, 11)
+SEMANTIC_DEDUP_PART_NUMBERS = (5, 6, 7, 8)
+
+REASONING_LAYER_GUIDANCE = {
+    2: {
+        "goal": "Разложить подтему на юридические узлы, проверить правовое ядро и собрать доказательное ядро ответа без преждевременного сужения поиска.",
+        "moves": [
+            "Сначала декомпозировать подтему на объект, действие нотариуса, участников, процедуру, деньги, ограничения, электронный и международный слой.",
+            "Строить не только прямые, но и скрытые гипотезы поиска: кодексный, профильный, подзаконный, ведомственный, ФНП, судебный, международный.",
+            "По каждому документу различать роль: прямоприменимый, опорный, карантинный или fail-safe фактор.",
+            "Не ограничиваться стартовыми query-подсказками, если смысл темы требует расширения поиска.",
+            "Решение о включении документа принимать по существованию, применимости, роли в теме и подтвержденному URL1; URL2 усиливает карточку, но сам по себе не решает вопрос включения.",
+        ],
+        "risks": [
+            "Потеря скрытого слоя темы из-за слишком раннего выбора 1-2 базовых актов.",
+            "Смешение substantive и tariff подтем в одном ответе.",
+            "Формальный вывод документа без реальной роли в теме.",
+        ],
+    },
+    3: {
+        "goal": "Пройти канонические блоки I-XXXVII как карту сфер права и не закрывать блок формальной отпиской без содержательной проверки.",
+        "moves": [
+            "Для каждого блока сначала решать, применим ли он к теме по смыслу, а уже потом искать документы.",
+            "Если блок применим, искать не только прямой акт, но и смежный документный слой внутри той же сферы.",
+            "Использовать fail-safe по блоку только после реального прохода, а не по инерции.",
+            "Отдельно контролировать обязательные блоки II, III, IV, X, XI, XII и XIV даже при слабой очевидности темы.",
+        ],
+        "risks": [
+            "Формальное 'не выявлено' без реального прохода по блоку.",
+            "Подмена канонической сетки I-XXXVII выдуманными заголовками.",
+            "Повтор Part 2 вместо карты сфер права.",
+        ],
+    },
+    4: {
+        "goal": "Построить карту органов и источников власти по их реальной роли в теме, а не по случайной встречаемости в поиске.",
+        "moves": [
+            "Для каждого подпункта 3.1 определять роль органа: нормотворец, контролер, оператор системы, держатель реестра, методический центр или международный участник.",
+            "Отделять акт органа от площадки публикации или вторичного пересказа.",
+            "Проверять, есть ли у органа собственный обязательный слой по теме или только косвенное упоминание.",
+            "Если по органу найден только вторичный материал, не выдавать это как полноценный нормативный результат.",
+        ],
+        "risks": [
+            "Смешение органов власти и площадок публикации.",
+            "Приписывание органу регулирующей роли, которой у него нет.",
+            "Потеря смежных органов при международном, цифровом или контрольном слое темы.",
+        ],
+    },
+    5: {
+        "goal": "Разложить найденный материал по слоям и сохранить только смыслово новые документы в каждом слое.",
+        "moves": [
+            "Для каждого слоя определять, что именно он добавляет к теме по сравнению с уже найденными документами.",
+            "Дедуплицировать по смысловой роли документа, а не только по названию.",
+            "Если документ уже найден, но в новом слое играет иную роль, прямо фиксировать эту роль, а не молча повторять карточку.",
+            "Следить, чтобы слойность не превращалась в повтор Part 2-4 под новым заголовком.",
+        ],
+        "risks": [
+            "Повтор одного и того же акта в разных слоях без нового содержания.",
+            "Потеря действительно нового слоя из-за формального дедупа.",
+            "Смешение кодексного, подзаконного и методического слоя.",
+        ],
+    },
+    6: {
+        "goal": "Применить фильтры к уже собранной базе и сохранить только документы, которые реально усиливают покрытие темы.",
+        "moves": [
+            "Смотреть на документ как на носитель роли: ядро, смежный слой, контрольный слой, международный слой, электронный слой.",
+            "Отбрасывать повторы и слабые кандидаты, но оставлять документы, закрывающие самостоятельный юридический риск.",
+            "После фильтрации перепроверять, не появился ли новый пробел по обязательному узлу темы.",
+        ],
+        "risks": [
+            "Слишком агрессивная фильтрация с потерей полезных документов.",
+            "Слабый документ оставлен только потому, что найден позже других.",
+            "Фильтр без повторной проверки на пробелы.",
+        ],
+    },
+    7: {
+        "goal": "Добавить только действительно новые документы без косметического размножения уже найденной базы.",
+        "moves": [
+            "Считать новым только документ, который дает новый нормативный слой, новый орган, новый режим или новый структурный элемент.",
+            "Не принимать за 'новый' тот же акт в другой редакции или на другой площадке без новой смысловой функции.",
+            "Проверять, закрывает ли документ ранее незакрытый риск или узел темы.",
+        ],
+        "risks": [
+            "Добавление псевдо-новых документов ради количества.",
+            "Подмена новых документов новыми ссылками на старые акты.",
+            "Потеря точечной, но ценной нормы из-за слишком грубого дедупа.",
+        ],
+    },
+    8: {
+        "goal": "Провести федеральный delta-check без повторения уже подтвержденных федеральных документов.",
+        "moves": [
+            "Сверять каждый федеральный кандидат с уже подтвержденной федеральной базой по роли, реквизитам и структурному элементу.",
+            "Оставлять только те федеральные документы, которые реально расширяют покрытие темы.",
+            "Если найден новый структурный элемент в уже известном федеральном акте, фиксировать это как дельту, а не как новый акт.",
+        ],
+        "risks": [
+            "Повтор федеральной базы под видом дельты.",
+            "Потеря нового структурного элемента внутри уже известного акта.",
+            "Смешение федеральной дельты с региональными или методическими источниками.",
+        ],
+    },
+    9: {
+        "goal": "Провести содержательный дельта-аудит: что еще упущено, что противоречит, что выглядит недожатым.",
+        "moves": [
+            "Искать подозрительно пустые узлы темы, особенно после фильтрации и дедупликации.",
+            "Сверять обязательные блоки, органы и слои с уже собранным ядром.",
+            "Фиксировать не только новые документы, но и структурные дыры, слабые верификации и сомнительные карантинные зоны.",
+            "Использовать аудит как проверку полноты, а не как формальное повторение списка документов.",
+        ],
+        "risks": [
+            "Формальный аудит без новых выводов.",
+            "Потеря противоречий между частями 2-8.",
+            "Недостаточный акцент на реальных пропусках и слабых местах доказательной базы.",
+        ],
+    },
+    10: {
+        "goal": "Собрать прикладной мини-конспект из уже подтвержденной доказательной базы без фантазирования и без переписывания всего документа.",
+        "moves": [
+            "Выделять только ключевые нормы, режимы, риски и опорные документы, которые реально управляют темой.",
+            "Показывать связи между ядром, смежными слоями, отказами, ограничениями и практическими последствиями.",
+            "Сжимать материал до полезного прикладного конспекта, а не до формального реферата.",
+        ],
+        "risks": [
+            "Повтор всего документа вместо конспекта.",
+            "Добавление непроверенных выводов, которых не было в собранной базе.",
+            "Потеря практических рисков и ограничений.",
+        ],
+    },
+    11: {
+        "goal": "Построить перечень практических заданий только из реально найденного нормативного материала и рисков темы.",
+        "moves": [
+            "Выводить задания из подтвержденных документов, процедур, ограничений, отказов, проверок и международных режимов темы.",
+            "Давать задания прикладные, проверяемые и привязанные к найденным актам и структурным элементам.",
+            "Не генерировать учебный шум, если его нельзя опереть на уже собранную базу.",
+        ],
+        "risks": [
+            "Абстрактные задания без опоры на документы темы.",
+            "Повтор мини-конспекта вместо практических задач.",
+            "Уход в смежные темы, не подтвержденные текущей базой.",
+        ],
+    },
+}
+
 PART_02_REQUIRED_MARKERS = [
     "АНАЛИЗ ОБЛАСТИ ПРАВА",
     "АНАЛИЗ-КОДЕКСЫ И БАЗОВЫЕ АКТЫ",
@@ -1248,7 +1392,7 @@ def build_part_02_queries(run_workspace: SubtopicRunWorkspace) -> list[dict[str,
         "readable_url2",
         f"\"{title}\" site:consultant.ru OR site:garant.ru OR site:docs.cntd.ru",
         ["consultant.ru", "garant.ru", "docs.cntd.ru"],
-        "Подбирать читаемый VERIFIED URL2 только после сверки реквизитов.",
+        "Подбирать читаемый VERIFIED URL2 для усиления карточки только после сверки реквизитов.",
     )
     add_query(
         "q04",
@@ -1419,9 +1563,9 @@ def build_part_02_research_pack(run_workspace: SubtopicRunWorkspace) -> str:
             "",
             "1. Найти URL1-источник на официальном правовом портале или ином официальном ресурсе.",
             "2. Сверить точные реквизиты и заголовок страницы.",
-            "3. Найти читаемый URL2-кандидат и подтвердить совпадение реквизитов.",
-            "4. Только после этого включать документ в ядро или опорный слой.",
-            "5. При сомнении по URL2, статусу или структурному элементу переносить документ в КАРАНТИН, а не терять его.",
+            "3. Определить существование документа, его роль в теме и применимость к конкретной Части.",
+            "4. Найти читаемый URL2-кандидат и подтвердить совпадение реквизитов, если это удается довести до конца.",
+            "5. Если документ подтвержден по существованию, роли, применимости и URL1, включать его в ядро или опорный слой даже при слабом URL2; карантин использовать только при реальной неопределенности по самому документу, а не по одной читабельной ссылке.",
             "",
             "## Стартовые запросы",
             "",
@@ -1559,21 +1703,19 @@ def build_llm_operator_sequence(run_workspace: SubtopicRunWorkspace) -> str:
 
 def build_part_02_launch_packet(run_workspace: SubtopicRunWorkspace) -> str:
     focus = build_part_02_focus(run_workspace)
-    queries_md = render_part_02_queries_markdown(run_workspace, build_part_02_queries(run_workspace)).strip()
-    source_cascade_md = render_part_02_source_cascade_markdown(PART_02_SOURCE_CASCADE).strip()
-    research_pack_md = build_part_02_research_pack(run_workspace).strip()
-    core_template_md = build_part_02_core_template(run_workspace).strip()
     part_02_input = next(part.content.strip() for part in run_workspace.parts if part.number == 2)
+    literal_context_md = build_literal_context_bundle(run_workspace, 2)
+    reasoning_brief_md = build_reasoning_part_brief(run_workspace, 2)
     lines = [
         f"# Part 02 Launch Packet: {focus['subtopic_line']}",
         "",
-        "Этот файл можно целиком использовать как готовый пакет для запуска Части 2 в LLM после завершения Части 1 и сигнала `GO/СТАРТ`.",
+        "Этот файл должен максимально буквально продолжать ручной сильный сценарий по Части 2, а не подменять его пересказом.",
         "",
-        "## Предусловие",
+        "## Режим",
         "",
-        "- Часть 1 уже завершена в latest run-workspace.",
-        "- Для этого launch packet сигнал `GO/СТАРТ` считается выданным.",
-        "- Нельзя повторять I–II подтверждения и нельзя писать мета-анализ мастер-промпта.",
+        "- Не пересказывать мастер-промпт и не делать мета-анализ вместо исполнения.",
+        "- Не сужать охват только до заранее подготовленных поисковых строк: они могут помогать, но не ограничивают поиск.",
+        "- Считать этот пакет прямым продолжением той же подтемы после Части 1 и сигнала `GO/СТАРТ`.",
         "",
         "## Что должен вернуть LLM",
         "",
@@ -1581,7 +1723,9 @@ def build_part_02_launch_packet(run_workspace: SubtopicRunWorkspace) -> str:
         "- Вернуть только финально-годный ответ по Части 2.",
         "- Сохранить жесткий порядок блоков и не добавлять лишние разделы раньше времени.",
         "- Все URL, домены и ссылочные идентификаторы писать только внутри fenced code blocks.",
-        "- Если URL2 не подтвержден, документ не выбрасывать, а отправлять в `КАРАНТИН`.",
+        "- Если документ подтвержден по существованию, применимости, роли и URL1, он не должен теряться из-за слабого URL2: оставлять его в `A` или `B` по роли и явно помечать статус `VERIFIED URL2` и сверку реквизитов.",
+        "- В `КАРАНТИН` переносить документ только при реальном сомнении в существовании, действии, точной идентификации, применимости или структурном элементе.",
+        "- Режим `URL2: отсутствует (КАРАНТИН)` относится к полю `URL2` внутри карточки и сам по себе не означает перенос документа в раздел `КАРАНТИН`.",
         "- Не публиковать в Part 2 блоки I-XXXVII, статусы `НАЙДЕНО/НЕ ВЫЯВЛЕНО`, диапазоны блоков и иные результаты обработки СФЕРЫ ПОИСКА: это отдельная Часть 3.",
         "- Внутренняя маркировка применимости блоков допустима только внутри размышления исполнителя и не должна попадать в финальный текст ответа по Части 2.",
         "",
@@ -1590,28 +1734,32 @@ def build_part_02_launch_packet(run_workspace: SubtopicRunWorkspace) -> str:
     ]
     for marker in PART_02_REQUIRED_MARKERS:
         lines.append(f"- `{marker}`")
+    lines.extend(["", reasoning_brief_md, ""])
+    if literal_context_md:
+        lines.extend(["", literal_context_md, ""])
     lines.extend(
         [
-            "",
-            "## Инструкция из Части 2 Приказа",
+            "## Точная инструкция Части 2",
             "",
             part_02_input,
             "",
-            "## Web-first Research Pack",
+            "## Внутренние guardrails этой подтемы",
             "",
-            research_pack_md,
-            "",
-            "## Query Plan",
-            "",
-            queries_md,
-            "",
-            "## Source Cascade",
-            "",
-            source_cascade_md,
-            "",
-            "## Core Template",
-            "",
-            core_template_md,
+            f"- Тип подтемы: `{focus['subtopic_type']}`",
+            f"- Фокус: `{focus['query_focus']}`",
+            f"- Правило: {focus['execution_note']}",
+        ]
+    )
+    if focus["tariff_sibling"]:
+        lines.append(
+            f"- Не смешивать самостоятельный тарифный разбор с базовой подтемой: тариф вынесен в `{focus['tariff_sibling']['item_id']}`."
+        )
+    if focus["substantive_sibling"]:
+        lines.append(
+            f"- Тарифный блок должен быть привязан к базовому действию из `{focus['substantive_sibling']['item_id']}`."
+        )
+    lines.extend(
+        [
             "",
             "## Требование к ответу",
             "",
@@ -1628,6 +1776,929 @@ def build_part_02_launch_packet(run_workspace: SubtopicRunWorkspace) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def get_order_part(run_workspace: SubtopicRunWorkspace, part_number: int) -> OrderPart:
+    for part in run_workspace.parts:
+        if part.number == part_number:
+            return part
+    raise RuntimeError(f"Unknown part number: {part_number}")
+
+
+def get_part_output_path(run_workspace: SubtopicRunWorkspace, part_number: int) -> Path:
+    return run_workspace.stage_outputs_dir / f"part-{part_number:02d}.md"
+
+
+def load_completed_part_output(run_workspace: SubtopicRunWorkspace, part_number: int) -> str | None:
+    output_path = get_part_output_path(run_workspace, part_number)
+    if not output_path.exists():
+        return None
+    content = read_text(output_path).strip()
+    if not content or is_response_stub(content):
+        return None
+    return content
+
+
+def collect_literal_context_parts(
+    run_workspace: SubtopicRunWorkspace,
+    target_part_number: int,
+) -> list[tuple[int, str]]:
+    collected: list[tuple[int, str]] = []
+    for part_number in range(1, target_part_number):
+        content = load_completed_part_output(run_workspace, part_number)
+        if content:
+            collected.append((part_number, content))
+    return collected
+
+
+def build_literal_context_bundle(
+    run_workspace: SubtopicRunWorkspace,
+    target_part_number: int,
+) -> str:
+    context_parts = collect_literal_context_parts(run_workspace, target_part_number)
+    if not context_parts:
+        return ""
+
+    lines = [
+        "## Живой контекст этой же подтемы",
+        "",
+        "Продолжать как следующий шаг той же работы. Уже подтвержденные части ниже не перезапускать и не переписывать заново без прямой необходимости.",
+        "",
+    ]
+    for part_number, content in context_parts:
+        title = FINAL_PART_TITLES.get(part_number, f"ЧАСТЬ {part_number}")
+        lines.extend(
+            [
+                f"### ЧАСТЬ {part_number}. {title}",
+                "",
+                content,
+                "",
+            ]
+        )
+    return "\n".join(lines).rstrip()
+
+
+def build_reasoning_layer_paths(run_workspace: SubtopicRunWorkspace) -> dict[str, Any]:
+    reasoning_dir = run_workspace.web_plan_dir / "reasoning-layer"
+    brief_files = {
+        part_number: reasoning_dir / f"part-{part_number:02d}.reasoning.md"
+        for part_number in REASONING_LAYER_PART_NUMBERS
+    }
+    return {
+        "reasoning_dir": reasoning_dir,
+        "readme": reasoning_dir / "README.reasoning-layer.md",
+        "brief_files": brief_files,
+    }
+
+
+def build_reasoning_layer_readme(run_workspace: SubtopicRunWorkspace) -> str:
+    paths = build_reasoning_layer_paths(run_workspace)
+    lines = [
+        f"# Reasoning Layer: {run_workspace.subtopic_entry.line}",
+        "",
+        "Этот каталог хранит reasoning-briefs по Частям 2–11.",
+        "Они усиливают интеллектуальный режим поиска, фильтрации, дедупликации, дельта-аудита и синтеза по всей подтеме.",
+        "",
+    ]
+    for part_number in REASONING_LAYER_PART_NUMBERS:
+        title = FINAL_PART_TITLES.get(part_number, f"ЧАСТЬ {part_number}")
+        lines.append(f"- Часть {part_number}. {title}: `{paths['brief_files'][part_number]}`")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_reasoning_part_brief(
+    run_workspace: SubtopicRunWorkspace,
+    part_number: int,
+    heading_level: str = "##",
+) -> str:
+    guidance = REASONING_LAYER_GUIDANCE[part_number]
+    title = FINAL_PART_TITLES.get(part_number, f"ЧАСТЬ {part_number}")
+    focus = build_part_02_focus(run_workspace)
+    completed_parts = [
+        str(number)
+        for number in range(1, part_number)
+        if load_completed_part_output(run_workspace, number)
+    ]
+    completed_label = ", ".join(completed_parts) if completed_parts else "нет подтвержденных предыдущих частей"
+    lines = [
+        f"{heading_level} Reasoning-layer: Часть {part_number}. {title}",
+        "",
+        f"Цель reasoning-слоя: {guidance['goal']}",
+        "",
+        "Контекст подтемы:",
+        f"- Подтема: `{run_workspace.subtopic_entry.line}`",
+        f"- Тип подтемы: `{focus['subtopic_type']}`",
+        f"- Фокус: `{focus['query_focus']}`",
+        f"- Подтвержденные предыдущие части: {completed_label}",
+        f"- Базовое правило исполнения: {focus['execution_note']}",
+    ]
+    if focus["substantive_sibling"]:
+        sibling = focus["substantive_sibling"]
+        lines.append(
+            f"- Связанная базовая подтема: `{sibling['item_id']}. {ensure_trailing_period(sibling['title'])}`"
+        )
+    if focus["tariff_sibling"]:
+        sibling = focus["tariff_sibling"]
+        lines.append(
+            f"- Связанная тарифная подтема: `{sibling['item_id']}. {ensure_trailing_period(sibling['title'])}`"
+        )
+    lines.extend(["", "Как думать на этой стадии:"])
+    for item in guidance["moves"]:
+        lines.append(f"- {item}")
+    lines.extend(
+        [
+            "",
+            "Модель верификации документа:",
+            "- Сначала решать вопрос существования, применимости и роли документа в теме.",
+            "- `URL1` обязателен как якорь официальности, если он реально найден.",
+            "- `URL2` нужен для усиления карточки, но его неполная верификация не должна сама по себе выбрасывать документ.",
+            "- Если документ подтвержден по существованию, применимости, роли и URL1, он остается в основном массиве с пометкой статуса `VERIFIED URL2`/`Сверка реквизитов`.",
+            "- В `КАРАНТИН` документ уходит только при материальной неопределенности по самому документу, а не из-за одной слабой читабельной ссылки.",
+        ]
+    )
+    lines.extend(["", "Типичные пропуски и ошибки:"])
+    for item in guidance["risks"]:
+        lines.append(f"- {item}")
+    lines.extend(
+        [
+            "",
+            "Общие запреты reasoning-слоя:",
+            "- Не придумывать документы, роли или связи без подтвержденной документной опоры.",
+            "- Не ослаблять охват только потому, что предыдущие части уже содержат большой объем материала.",
+            "- Не превращать reasoning-layer в мета-комментарий вместо исполнения текущей Части.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def write_reasoning_layer(run_workspace: SubtopicRunWorkspace, overwrite: bool) -> dict[str, Any]:
+    paths = build_reasoning_layer_paths(run_workspace)
+    paths["reasoning_dir"].mkdir(parents=True, exist_ok=True)
+    write_text_if_needed(paths["readme"], build_reasoning_layer_readme(run_workspace), overwrite)
+    for part_number in REASONING_LAYER_PART_NUMBERS:
+        write_text_if_needed(
+            paths["brief_files"][part_number],
+            build_reasoning_part_brief(run_workspace, part_number, heading_level="#"),
+            overwrite,
+        )
+    return paths
+
+
+def load_json_if_exists(path: Path) -> Any | None:
+    if not path.exists():
+        return None
+    return json.loads(read_text(path))
+
+
+def count_document_cards(text: str | None) -> int:
+    if not text:
+        return 0
+    return text.count("Вид документа:")
+
+
+def collect_manifest_part_statuses(run_workspace: SubtopicRunWorkspace) -> dict[int, str]:
+    manifest_path = run_workspace.run_dir / "manifest.json"
+    manifest = load_json_if_exists(manifest_path)
+    if not manifest:
+        return {}
+    statuses: dict[int, str] = {}
+    for item in manifest.get("parts", []):
+        statuses[int(item.get("part_number", 0))] = str(item.get("status", ""))
+    return statuses
+
+
+def collect_present_parts(run_workspace: SubtopicRunWorkspace, max_part_number: int) -> list[int]:
+    present: list[int] = []
+    for part_number in range(1, max_part_number + 1):
+        if load_completed_part_output(run_workspace, part_number):
+            present.append(part_number)
+    return present
+
+
+def find_missing_canonical_part_03_blocks(text: str | None) -> list[str]:
+    if not text:
+        return list(PART_03_CANONICAL_BLOCKS.keys())
+    found: set[str] = set()
+    for roman, title in PART_03_CANONICAL_BLOCKS.items():
+        pattern = re.compile(rf"(?m)^\s*\*{{0,2}}{re.escape(roman)}\.\s+{re.escape(title)}\b")
+        if pattern.search(text):
+            found.add(roman)
+    return [roman for roman in PART_03_CANONICAL_BLOCKS if roman not in found]
+
+
+def get_capture_progress(capture_status_path: Path, expected_total: int) -> dict[str, Any]:
+    payload = load_json_if_exists(capture_status_path) or {}
+    captured = [int(item) for item in payload.get("captured_segment_ids", [])]
+    remaining = [int(item) for item in payload.get("remaining_segment_ids", [])]
+    return {
+        "captured_count": len(captured),
+        "remaining_count": len(remaining) if remaining else max(expected_total - len(captured), 0),
+        "expected_total": expected_total,
+    }
+
+
+def build_omission_audit_paths(run_workspace: SubtopicRunWorkspace) -> dict[str, Any]:
+    audit_dir = run_workspace.web_plan_dir / "omission-audit"
+    brief_files = {
+        part_number: audit_dir / f"part-{part_number:02d}.omission-audit.md"
+        for part_number in OMISSION_AUDIT_PART_NUMBERS
+    }
+    return {
+        "audit_dir": audit_dir,
+        "readme": audit_dir / "README.omission-audit.md",
+        "snapshot_json": audit_dir / "omission-audit.snapshot.json",
+        "brief_files": brief_files,
+    }
+
+
+def build_omission_audit_snapshot(run_workspace: SubtopicRunWorkspace) -> dict[str, Any]:
+    focus = build_part_02_focus(run_workspace)
+    part_statuses = collect_manifest_part_statuses(run_workspace)
+    completed_parts = collect_present_parts(run_workspace, 11)
+
+    part_02_output = load_completed_part_output(run_workspace, 2)
+    part_03_output = load_completed_part_output(run_workspace, 3)
+    part_04_output = load_completed_part_output(run_workspace, 4)
+    part_05_output = load_completed_part_output(run_workspace, 5)
+    part_06_output = load_completed_part_output(run_workspace, 6)
+    part_07_output = load_completed_part_output(run_workspace, 7)
+    part_08_output = load_completed_part_output(run_workspace, 8)
+
+    part_03_missing_blocks = find_missing_canonical_part_03_blocks(part_03_output)
+    part_04_progress = get_capture_progress(
+        build_part_04_plan_paths(run_workspace)["capture_status"],
+        len(PART_04_SEGMENTS),
+    )
+    part_05_progress = get_capture_progress(
+        build_part_05_plan_paths(run_workspace)["capture_status"],
+        len(PART_05_SEGMENTS),
+    )
+
+    part_02_marker_state = {
+        marker: bool(part_02_output and marker in part_02_output)
+        for marker in PART_02_REQUIRED_MARKERS
+    }
+
+    heuristic_flags: list[str] = []
+    missing_part_02_markers = [marker for marker, present in part_02_marker_state.items() if not present]
+    if missing_part_02_markers:
+        heuristic_flags.append(
+            "В Части 2 отсутствуют обязательные маркеры: " + ", ".join(missing_part_02_markers)
+        )
+    if part_03_output and part_03_missing_blocks:
+        heuristic_flags.append(
+            f"В Части 3 отсутствуют канонические блоки: {', '.join(part_03_missing_blocks[:8])}"
+            + (" ..." if len(part_03_missing_blocks) > 8 else "")
+        )
+    if part_04_progress["captured_count"] < part_04_progress["expected_total"]:
+        heuristic_flags.append(
+            f"Часть 4 закрыта не полностью: {part_04_progress['captured_count']} из {part_04_progress['expected_total']} диапазонов."
+        )
+    if part_05_progress["captured_count"] < part_05_progress["expected_total"]:
+        heuristic_flags.append(
+            f"Часть 5 закрыта не полностью: {part_05_progress['captured_count']} из {part_05_progress['expected_total']} диапазонов."
+        )
+    for part_number, output in ((6, part_06_output), (7, part_07_output), (8, part_08_output)):
+        if not output:
+            heuristic_flags.append(f"Часть {part_number} пока не подтверждена; omission audit должен учитывать этот пробел.")
+    if part_02_output and "КАРАНТИН" in part_02_output:
+        heuristic_flags.append("В Части 2 есть карантинный слой: нужно отдельно проверить, что из карантина так и осталось недожатым.")
+    if focus["subtopic_type"] == "substantive" and focus["tariff_sibling"]:
+        heuristic_flags.append(
+            f"У подтемы есть отдельный тарифный sibling `{focus['tariff_sibling']['item_id']}`: omission audit не должен смешивать тарифный добор с базовой подтемой."
+        )
+    if focus["subtopic_type"] == "tariff" and focus["substantive_sibling"]:
+        heuristic_flags.append(
+            f"Тарифная подтема должна сохранять привязку к базовому действию `{focus['substantive_sibling']['item_id']}`."
+        )
+
+    audit_questions = [
+        "Какие обязательные смысловые узлы темы выглядят недожатыми даже после Частей 2–8?",
+        "Какие обязательные блоки, органы или слои пройдены формально, но слабо доказаны документами?",
+        "Где фильтры и дедуп могли убрать полезный документ слишком рано?",
+        "Какие карантинные или слабо верифицированные позиции стоит перепроверить отдельным добором?",
+        "Какие скрытые режимы темы могли остаться вне поля зрения: международный, цифровой, контрольный, процессуальный, финансовый?",
+    ]
+
+    return {
+        "generated_at": utc_now_iso(),
+        "subtopic_id": run_workspace.subtopic_entry.item_id,
+        "subtopic_line": run_workspace.subtopic_entry.line,
+        "subtopic_type": focus["subtopic_type"],
+        "query_focus": focus["query_focus"],
+        "completed_parts": completed_parts,
+        "part_statuses": part_statuses,
+        "part_02": {
+            "markers_present": part_02_marker_state,
+            "document_cards": count_document_cards(part_02_output),
+            "has_quarantine": bool(part_02_output and "КАРАНТИН" in part_02_output),
+        },
+        "part_03": {
+            "document_cards": count_document_cards(part_03_output),
+            "missing_canonical_blocks": part_03_missing_blocks,
+            "covered_blocks_count": len(PART_03_CANONICAL_BLOCKS) - len(part_03_missing_blocks),
+            "expected_blocks_count": len(PART_03_CANONICAL_BLOCKS),
+        },
+        "part_04": {
+            "document_cards": count_document_cards(part_04_output),
+            **part_04_progress,
+        },
+        "part_05": {
+            "document_cards": count_document_cards(part_05_output),
+            **part_05_progress,
+        },
+        "part_06": {"present": bool(part_06_output), "document_cards": count_document_cards(part_06_output)},
+        "part_07": {"present": bool(part_07_output), "document_cards": count_document_cards(part_07_output)},
+        "part_08": {"present": bool(part_08_output), "document_cards": count_document_cards(part_08_output)},
+        "heuristic_flags": heuristic_flags,
+        "audit_questions": audit_questions,
+    }
+
+
+def build_omission_audit_readme(run_workspace: SubtopicRunWorkspace) -> str:
+    paths = build_omission_audit_paths(run_workspace)
+    lines = [
+        f"# Omission Audit Layer: {run_workspace.subtopic_entry.line}",
+        "",
+        "Этот каталог хранит второй проход на пропуски после Частей 2–8.",
+        "Его задача — не повторить список документов, а подсветить слабые места покрытия и подготовить сильный Part 9.",
+        "",
+        f"- Snapshot: `{paths['snapshot_json']}`",
+    ]
+    for part_number in OMISSION_AUDIT_PART_NUMBERS:
+        lines.append(f"- Brief for Part {part_number}: `{paths['brief_files'][part_number]}`")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_omission_audit_brief(run_workspace: SubtopicRunWorkspace, part_number: int) -> str:
+    snapshot = build_omission_audit_snapshot(run_workspace)
+    title = FINAL_PART_TITLES.get(part_number, f"ЧАСТЬ {part_number}")
+    lines = [
+        f"## Omission Audit Layer: Часть {part_number}. {title}",
+        "",
+        "Это второй проход на пропуски. Его цель — не переписать предыдущие части, а найти то, что еще недожато или выглядит слабо подтвержденным.",
+        "",
+        "Снимок текущего покрытия:",
+        f"- Подтема: `{snapshot['subtopic_line']}`",
+        f"- Тип подтемы: `{snapshot['subtopic_type']}`",
+        f"- Фокус: `{snapshot['query_focus']}`",
+        f"- Подтвержденные части: {', '.join(map(str, snapshot['completed_parts'])) if snapshot['completed_parts'] else 'нет'}",
+        f"- Часть 2: карточек документов = {snapshot['part_02']['document_cards']}, карантин = {snapshot['part_02']['has_quarantine']}",
+        f"- Часть 3: блоков закрыто = {snapshot['part_03']['covered_blocks_count']} из {snapshot['part_03']['expected_blocks_count']}",
+        f"- Часть 4: диапазонов закрыто = {snapshot['part_04']['captured_count']} из {snapshot['part_04']['expected_total']}",
+        f"- Часть 5: диапазонов закрыто = {snapshot['part_05']['captured_count']} из {snapshot['part_05']['expected_total']}",
+        f"- Часть 6 подтверждена = {snapshot['part_06']['present']}",
+        f"- Часть 7 подтверждена = {snapshot['part_07']['present']}",
+        f"- Часть 8 подтверждена = {snapshot['part_08']['present']}",
+        "",
+        "Подозрительные места и флаги:",
+    ]
+    if snapshot["heuristic_flags"]:
+        for item in snapshot["heuristic_flags"]:
+            lines.append(f"- {item}")
+    else:
+        lines.append("- Явных структурных флагов по состоянию run не обнаружено, но omission audit все равно обязателен.")
+    lines.extend(["", "Контрольные вопросы второго прохода:"])
+    for item in snapshot["audit_questions"]:
+        lines.append(f"- {item}")
+    lines.extend(
+        [
+            "",
+            "Режим omission audit:",
+            "- Искать не количество документов, а реальный недожатый смысловой слой.",
+            "- Проверять не только отсутствие документа, но и слабость верификации уже найденного документа.",
+            "- Не повторять уже сильные карточки без новой дельты.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def write_omission_audit_layer(run_workspace: SubtopicRunWorkspace, overwrite: bool) -> dict[str, Any]:
+    paths = build_omission_audit_paths(run_workspace)
+    paths["audit_dir"].mkdir(parents=True, exist_ok=True)
+    write_text_if_needed(paths["readme"], build_omission_audit_readme(run_workspace), overwrite)
+    write_json(paths["snapshot_json"], build_omission_audit_snapshot(run_workspace))
+    for part_number in OMISSION_AUDIT_PART_NUMBERS:
+        write_text_if_needed(
+            paths["brief_files"][part_number],
+            build_omission_audit_brief(run_workspace, part_number),
+            overwrite,
+        )
+    return paths
+
+
+def strip_document_card_prefix(value: str) -> str:
+    return re.sub(r"^\d+\.\s+", "", value).strip()
+
+
+def normalize_card_field_label(label: str) -> str:
+    lowered = strip_document_card_prefix(label).strip().lower().replace("ё", "е")
+    if lowered.startswith("вид документа"):
+        return "doc_type"
+    if lowered.startswith("полное официальное наименование документа"):
+        return "full_name"
+    if lowered.startswith("полное наименование"):
+        return "full_name"
+    if lowered in {"орган", "орган принятия (издания)", "орган принятия", "орган издания"}:
+        return "organ"
+    if lowered.startswith("дата и номер"):
+        return "date_number"
+    if lowered == "дата":
+        return "date"
+    if "структурный элемент" in lowered or "структурные элементы" in lowered:
+        return "structure"
+    if lowered.startswith("значение для темы"):
+        return "significance"
+    if lowered.startswith("url1"):
+        return "url1"
+    if lowered.startswith("url2"):
+        return "url2"
+    if lowered.startswith("каноническая строка поиска"):
+        return "search_query"
+    return normalize_search_key(lowered).replace(" ", "_")
+
+
+def extract_card_fields(card_lines: list[str]) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    current_label: str | None = None
+    in_code_block = False
+    for raw_line in card_lines:
+        stripped = raw_line.strip()
+        if stripped.startswith("```"):
+            in_code_block = not in_code_block
+            continue
+        match = re.match(r"^(?:\d+\.\s+)?([^:]{1,120}):\s*(.*)$", stripped)
+        if match:
+            current_label = normalize_card_field_label(match.group(1))
+            value = match.group(2).strip()
+            if value:
+                fields[current_label] = value
+            else:
+                fields.setdefault(current_label, "")
+            continue
+        if current_label and stripped:
+            separator = "" if fields.get(current_label, "").endswith("/") else " "
+            existing = fields.get(current_label, "")
+            fields[current_label] = f"{existing}{separator}{stripped}".strip()
+        elif in_code_block and stripped:
+            current_label = None
+    return fields
+
+
+def infer_document_role(part_number: int, scope_heading: str, fields: dict[str, str]) -> tuple[str, str]:
+    normalized_scope = normalize_search_key(scope_heading) or "__global__"
+    display_scope = scope_heading if scope_heading and scope_heading != "__global__" else "глобальный контекст части"
+    if part_number == 2:
+        if scope_heading == "A. РЕГУЛЯТОРНОЕ ЯДРО":
+            bucket = "regulatory_core"
+            label = "регуляторное ядро"
+        elif scope_heading == "B. ОПОРНЫЕ ДОКУМЕНТЫ":
+            bucket = "supporting_documents"
+            label = "опорные документы"
+        elif scope_heading == "КАРАНТИН":
+            bucket = "quarantine"
+            label = "карантин"
+        elif scope_heading == "FAIL-SAFE CHECK":
+            bucket = "fail_safe"
+            label = "fail-safe"
+        else:
+            bucket = "part_02"
+            label = "Часть 2"
+    elif part_number == 3:
+        bucket = "search_sphere"
+        label = f"сфера поиска: {display_scope}"
+    elif part_number == 4:
+        bucket = "authority_search"
+        label = f"орган/подпункт: {display_scope}"
+    elif part_number == 5:
+        bucket = "layering"
+        label = f"слой: {display_scope}"
+    elif part_number == 6:
+        bucket = "filter"
+        label = "фильтр"
+    elif part_number == 7:
+        bucket = "new_without_repeats"
+        label = "новые документы без повторов"
+    elif part_number == 8:
+        bucket = "federal_delta"
+        label = "федеральная дельта"
+    else:
+        bucket = f"part_{part_number:02d}"
+        label = f"Часть {part_number}"
+
+    significance = normalize_search_key(fields.get("significance", ""))
+    if bucket in {"part_02", "supporting_documents"} and "карантин" in significance:
+        bucket = "quarantine"
+        label = "карантин"
+    return f"{bucket}::{normalized_scope}", label
+
+
+def build_document_identity_key(fields: dict[str, str]) -> str:
+    full_name = normalize_search_key(fields.get("full_name", ""))
+    doc_type = normalize_search_key(fields.get("doc_type", ""))
+    organ = normalize_search_key(fields.get("organ", ""))
+    date_number = normalize_search_key(fields.get("date_number", "") or fields.get("date", ""))
+    url1 = normalize_search_key(fields.get("url1", ""))
+    if full_name:
+        pieces = [full_name]
+        if date_number:
+            pieces.append(date_number)
+        return " | ".join(pieces)
+    fallback = " | ".join(item for item in (doc_type, organ, date_number, url1) if item)
+    return fallback or "__unknown_document__"
+
+
+def parse_document_cards(text: str | None, part_number: int) -> list[dict[str, Any]]:
+    if not text:
+        return []
+    cards: list[dict[str, Any]] = []
+    current_scope = "__global__"
+    in_code_block = False
+    card_lines: list[str] = []
+    card_scope = current_scope
+
+    def flush_card() -> None:
+        nonlocal card_lines, card_scope
+        if not card_lines:
+            return
+        fields = extract_card_fields(card_lines)
+        if "doc_type" not in fields:
+            card_lines = []
+            return
+        role_key, role_label = infer_document_role(part_number, card_scope, fields)
+        display_name = (
+            fields.get("full_name")
+            or fields.get("doc_type")
+            or "Неопознанный документ"
+        )
+        cards.append(
+            {
+                "part_number": part_number,
+                "scope_heading": card_scope,
+                "role_key": role_key,
+                "role_label": role_label,
+                "identity_key": build_document_identity_key(fields),
+                "display_name": display_name,
+                "fields": fields,
+                "raw": "\n".join(card_lines).strip(),
+            }
+        )
+        card_lines = []
+
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if stripped.startswith("```"):
+            in_code_block = not in_code_block
+            if card_lines:
+                card_lines.append(raw_line)
+            continue
+        if not in_code_block and is_structural_heading(stripped):
+            flush_card()
+            current_scope = stripped
+            continue
+        if re.match(r"^(?:\d+\.\s+)?Вид документа:", stripped):
+            flush_card()
+            card_scope = current_scope
+            card_lines = [raw_line]
+            continue
+        if card_lines:
+            card_lines.append(raw_line)
+    flush_card()
+    return cards
+
+
+def collect_semantic_dedup_cards(run_workspace: SubtopicRunWorkspace) -> list[dict[str, Any]]:
+    cards: list[dict[str, Any]] = []
+    for part_number in range(2, 9):
+        cards.extend(parse_document_cards(load_completed_part_output(run_workspace, part_number), part_number))
+    return cards
+
+
+def build_semantic_dedup_paths(run_workspace: SubtopicRunWorkspace) -> dict[str, Any]:
+    dedup_dir = run_workspace.web_plan_dir / "semantic-dedup"
+    brief_files = {
+        part_number: dedup_dir / f"part-{part_number:02d}.semantic-dedup.md"
+        for part_number in SEMANTIC_DEDUP_PART_NUMBERS
+    }
+    return {
+        "dedup_dir": dedup_dir,
+        "readme": dedup_dir / "README.semantic-dedup.md",
+        "snapshot_json": dedup_dir / "semantic-dedup.snapshot.json",
+        "brief_files": brief_files,
+    }
+
+
+def build_semantic_dedup_snapshot(run_workspace: SubtopicRunWorkspace) -> dict[str, Any]:
+    cards = collect_semantic_dedup_cards(run_workspace)
+    clusters: dict[str, list[dict[str, Any]]] = {}
+    for card in cards:
+        clusters.setdefault(card["identity_key"], []).append(card)
+
+    multi_role_documents: list[dict[str, Any]] = []
+    same_role_duplicates: list[dict[str, Any]] = []
+    semantic_delta_candidates: list[dict[str, Any]] = []
+
+    for identity_key, cluster_cards in clusters.items():
+        if len(cluster_cards) < 2:
+            continue
+        role_map: dict[str, list[dict[str, Any]]] = {}
+        for card in cluster_cards:
+            role_map.setdefault(card["role_key"], []).append(card)
+        display_name = cluster_cards[0]["display_name"]
+        roles = sorted({card["role_label"] for card in cluster_cards})
+        parts = sorted({card["part_number"] for card in cluster_cards})
+        if len(role_map) > 1:
+            multi_role_documents.append(
+                {
+                    "document": display_name,
+                    "identity_key": identity_key,
+                    "roles": roles,
+                    "parts": parts,
+                    "count": len(cluster_cards),
+                }
+            )
+        repeated_roles = [
+            {
+                "role_label": items[0]["role_label"],
+                "count": len(items),
+                "parts": sorted({item["part_number"] for item in items}),
+            }
+            for items in role_map.values()
+            if len(items) > 1
+        ]
+        if repeated_roles:
+            same_role_duplicates.append(
+                {
+                    "document": display_name,
+                    "identity_key": identity_key,
+                    "repeated_roles": repeated_roles,
+                    "parts": parts,
+                    "count": len(cluster_cards),
+                }
+            )
+        if len(role_map) > 1 and any(item["part_number"] in {7, 8} for item in cluster_cards):
+            semantic_delta_candidates.append(
+                {
+                    "document": display_name,
+                    "roles": roles,
+                    "parts": parts,
+                }
+            )
+
+    def trim(items: list[dict[str, Any]], limit: int = 12) -> list[dict[str, Any]]:
+        return items[:limit]
+
+    return {
+        "generated_at": utc_now_iso(),
+        "subtopic_id": run_workspace.subtopic_entry.item_id,
+        "subtopic_line": run_workspace.subtopic_entry.line,
+        "cards_total": len(cards),
+        "unique_documents_total": len(clusters),
+        "duplicate_documents_total": sum(1 for cluster in clusters.values() if len(cluster) > 1),
+        "same_role_duplicates_total": len(same_role_duplicates),
+        "multi_role_documents_total": len(multi_role_documents),
+        "same_role_duplicates": trim(sorted(same_role_duplicates, key=lambda item: (-item["count"], item["document"]))),
+        "multi_role_documents": trim(sorted(multi_role_documents, key=lambda item: (-item["count"], item["document"]))),
+        "semantic_delta_candidates": trim(sorted(semantic_delta_candidates, key=lambda item: (item["document"]))),
+    }
+
+
+def build_semantic_dedup_readme(run_workspace: SubtopicRunWorkspace) -> str:
+    paths = build_semantic_dedup_paths(run_workspace)
+    lines = [
+        f"# Semantic Dedup Layer: {run_workspace.subtopic_entry.line}",
+        "",
+        "Этот каталог хранит карту повторов документов по Частям 2–8.",
+        "Его задача — различать повтор того же акта в той же роли и допустимое повторное появление того же акта в новой роли.",
+        "",
+        f"- Snapshot: `{paths['snapshot_json']}`",
+    ]
+    for part_number in SEMANTIC_DEDUP_PART_NUMBERS:
+        lines.append(f"- Brief for Part {part_number}: `{paths['brief_files'][part_number]}`")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_semantic_dedup_brief(run_workspace: SubtopicRunWorkspace, part_number: int) -> str:
+    snapshot = build_semantic_dedup_snapshot(run_workspace)
+    title = FINAL_PART_TITLES.get(part_number, f"ЧАСТЬ {part_number}")
+    lines = [
+        f"## Semantic Dedup Layer: Часть {part_number}. {title}",
+        "",
+        "Смысловой дедуп работает так: один и тот же документ удаляется только если он повторяется в той же роли; если документ появляется в новой роли, его можно сохранять.",
+        "",
+        f"- Всего карточек документов в Частях 2–8: {snapshot['cards_total']}",
+        f"- Уникальных документов: {snapshot['unique_documents_total']}",
+        f"- Документов с повторами: {snapshot['duplicate_documents_total']}",
+        f"- Повторов в той же роли: {snapshot['same_role_duplicates_total']}",
+        f"- Документов, которые уже живут в нескольких ролях: {snapshot['multi_role_documents_total']}",
+        "",
+        "Как применять этот слой:",
+        "- Если документ уже найден в той же роли и в том же смысловом слое, не дублировать его снова.",
+        "- Если тот же документ закрывает новый слой, новый блок или новую дельту, сохранить его, но явно показать новую роль.",
+        "- При сомнении смотреть не на название документа, а на его функцию в текущей Части.",
+        "",
+        "Кандидаты на удаление как повторы в той же роли:",
+    ]
+    if snapshot["same_role_duplicates"]:
+        for item in snapshot["same_role_duplicates"][:6]:
+            repeated_roles = "; ".join(
+                f"{role['role_label']} ({role['count']})"
+                for role in item["repeated_roles"]
+            )
+            lines.append(f"- `{item['document']}` -> {repeated_roles}")
+    else:
+        lines.append("- Явных повторов в той же роли по текущему snapshot не найдено.")
+
+    lines.extend(["", "Документы, которые уже используются в нескольких ролях:"])
+    if snapshot["multi_role_documents"]:
+        for item in snapshot["multi_role_documents"][:6]:
+            lines.append(f"- `{item['document']}` -> роли: {', '.join(item['roles'])}")
+    else:
+        lines.append("- Пока не видно документов с несколькими подтвержденными ролями.")
+
+    lines.extend(
+        [
+            "",
+            "Контрольные вопросы semantic dedup:",
+            "- Это действительно новый документ, или просто другая ссылка на уже найденный акт?",
+            "- Если документ повторяется, он играет новую роль или снова делает ту же работу?",
+            "- Если документ оставляется, какую новую смысловую функцию он закрывает именно в этой Части?",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def write_semantic_dedup_layer(run_workspace: SubtopicRunWorkspace, overwrite: bool) -> dict[str, Any]:
+    paths = build_semantic_dedup_paths(run_workspace)
+    paths["dedup_dir"].mkdir(parents=True, exist_ok=True)
+    write_text_if_needed(paths["readme"], build_semantic_dedup_readme(run_workspace), overwrite)
+    write_json(paths["snapshot_json"], build_semantic_dedup_snapshot(run_workspace))
+    for part_number in SEMANTIC_DEDUP_PART_NUMBERS:
+        write_text_if_needed(
+            paths["brief_files"][part_number],
+            build_semantic_dedup_brief(run_workspace, part_number),
+            overwrite,
+        )
+    return paths
+
+
+def build_followup_part_packet(run_workspace: SubtopicRunWorkspace, part_number: int) -> str:
+    part = get_order_part(run_workspace, part_number)
+    literal_context_md = build_literal_context_bundle(run_workspace, part_number)
+    reasoning_brief_md = build_reasoning_part_brief(run_workspace, part_number)
+    semantic_dedup_md = (
+        build_semantic_dedup_brief(run_workspace, part_number)
+        if part_number in SEMANTIC_DEDUP_PART_NUMBERS
+        else ""
+    )
+    omission_audit_md = (
+        build_omission_audit_brief(run_workspace, part_number)
+        if part_number in OMISSION_AUDIT_PART_NUMBERS
+        else ""
+    )
+    title = FINAL_PART_TITLES.get(part_number, f"ЧАСТЬ {part_number}")
+    lines = [
+        f"# Part {part_number:02d} Continuation Packet: {run_workspace.subtopic_entry.line}",
+        "",
+        "Режим: максимально буквальное продолжение той же LLM-сессии по этой подтеме.",
+        "- Не перезапускать Части 1–5 и не возвращаться к `ТЕМА/АНАЛИЗ`, если текущая Часть этого не требует.",
+        "- Не ослаблять охват: использовать уже найденный материал как опору и дожимать именно текущую Часть.",
+        "- Все ссылки, URL, домены и якоря держать только внутри fenced code blocks.",
+        "",
+    ]
+    lines.extend([reasoning_brief_md, ""])
+    if semantic_dedup_md:
+        lines.extend([semantic_dedup_md, ""])
+    if omission_audit_md:
+        lines.extend([omission_audit_md, ""])
+    if literal_context_md:
+        lines.extend([literal_context_md, ""])
+    lines.extend(
+        [
+            f"## Точная инструкция Части {part_number}",
+            "",
+            part.content.strip(),
+            "",
+            "## Что вернуть",
+            "",
+            f"Вернуть только готовый ответ по Части {part_number} без перезапуска предыдущих частей и без служебных пояснений вне ответа.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def build_followup_part_packet_paths(run_workspace: SubtopicRunWorkspace) -> dict[str, Any]:
+    plan_dir = run_workspace.web_plan_dir / "follow-up-parts"
+    message_files = {
+        part_number: plan_dir / f"message.part-{part_number:02d}.md"
+        for part_number in FOLLOWUP_LITERAL_PART_NUMBERS
+    }
+    return {
+        "plan_dir": plan_dir,
+        "readme": plan_dir / "README.follow-up-parts.md",
+        "message_files": message_files,
+    }
+
+
+def build_followup_part_packets_readme(run_workspace: SubtopicRunWorkspace) -> str:
+    paths = build_followup_part_packet_paths(run_workspace)
+    lines = [
+        f"# Follow-up Part Packets: {run_workspace.subtopic_entry.line}",
+        "",
+        "Эти файлы нужны для Частей 6–11. В отличие от сырых stage-inputs они включают живой контекст уже завершенных частей этой же подтемы.",
+        "",
+    ]
+    for part_number in FOLLOWUP_LITERAL_PART_NUMBERS:
+        lines.append(f"- Часть {part_number}: `{paths['message_files'][part_number]}`")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_followup_part_packets(run_workspace: SubtopicRunWorkspace, overwrite: bool) -> dict[str, Any]:
+    paths = build_followup_part_packet_paths(run_workspace)
+    paths["plan_dir"].mkdir(parents=True, exist_ok=True)
+    write_text_if_needed(paths["readme"], build_followup_part_packets_readme(run_workspace), overwrite)
+    for part_number in FOLLOWUP_LITERAL_PART_NUMBERS:
+        write_text_if_needed(
+            paths["message_files"][part_number],
+            build_followup_part_packet(run_workspace, part_number),
+            overwrite,
+        )
+    return paths
+
+
+def refresh_dynamic_part_packets(run_workspace: SubtopicRunWorkspace) -> None:
+    write_text(run_workspace.run_dir / "README.run.md", build_subtopic_run_readme(run_workspace))
+
+    reasoning_paths = build_reasoning_layer_paths(run_workspace)
+    reasoning_paths["reasoning_dir"].mkdir(parents=True, exist_ok=True)
+    write_text(reasoning_paths["readme"], build_reasoning_layer_readme(run_workspace))
+    for part_number in REASONING_LAYER_PART_NUMBERS:
+        write_text(
+            reasoning_paths["brief_files"][part_number],
+            build_reasoning_part_brief(run_workspace, part_number, heading_level="#"),
+        )
+
+    semantic_dedup_paths = build_semantic_dedup_paths(run_workspace)
+    semantic_dedup_paths["dedup_dir"].mkdir(parents=True, exist_ok=True)
+    write_text(semantic_dedup_paths["readme"], build_semantic_dedup_readme(run_workspace))
+    write_json(semantic_dedup_paths["snapshot_json"], build_semantic_dedup_snapshot(run_workspace))
+    for part_number in SEMANTIC_DEDUP_PART_NUMBERS:
+        write_text(
+            semantic_dedup_paths["brief_files"][part_number],
+            build_semantic_dedup_brief(run_workspace, part_number),
+        )
+
+    omission_paths = build_omission_audit_paths(run_workspace)
+    omission_paths["audit_dir"].mkdir(parents=True, exist_ok=True)
+    write_text(omission_paths["readme"], build_omission_audit_readme(run_workspace))
+    write_json(omission_paths["snapshot_json"], build_omission_audit_snapshot(run_workspace))
+    for part_number in OMISSION_AUDIT_PART_NUMBERS:
+        write_text(
+            omission_paths["brief_files"][part_number],
+            build_omission_audit_brief(run_workspace, part_number),
+        )
+
+    part_02_paths = build_part_02_web_plan_paths(run_workspace)
+    write_text(part_02_paths["launch_packet"], build_part_02_launch_packet(run_workspace))
+    write_text(part_02_paths["message_03"], read_text(part_02_paths["launch_packet"]).rstrip() + "\n")
+
+    part_03_paths = build_part_03_plan_paths(run_workspace)
+    for segment in PART_03_SEGMENTS:
+        write_text(
+            part_03_paths["message_files"][segment["segment_id"]],
+            build_part_03_message(run_workspace, segment),
+        )
+
+    part_04_paths = build_part_04_plan_paths(run_workspace)
+    for segment in PART_04_SEGMENTS:
+        write_text(
+            part_04_paths["message_files"][segment["segment_id"]],
+            build_part_04_message(run_workspace, segment),
+        )
+
+    part_05_paths = build_part_05_plan_paths(run_workspace)
+    for segment in PART_05_SEGMENTS:
+        write_text(
+            part_05_paths["message_files"][segment["segment_id"]],
+            build_part_05_message(run_workspace, segment),
+        )
+
+    followup_paths = build_followup_part_packet_paths(run_workspace)
+    followup_paths["plan_dir"].mkdir(parents=True, exist_ok=True)
+    write_text(followup_paths["readme"], build_followup_part_packets_readme(run_workspace))
+    for part_number in FOLLOWUP_LITERAL_PART_NUMBERS:
+        write_text(
+            followup_paths["message_files"][part_number],
+            build_followup_part_packet(run_workspace, part_number),
+        )
 
 
 def write_part_02_web_plan(run_workspace: SubtopicRunWorkspace, overwrite: bool) -> dict[str, Path]:
@@ -1684,6 +2755,59 @@ def update_run_manifest_web_plan(run_workspace: SubtopicRunWorkspace, plan_paths
         "message_03": str(plan_paths["message_03"]),
         "research_log": str(plan_paths["research_log"]),
         "evidence_dir": str(plan_paths["evidence_dir"]),
+    }
+    write_json(manifest_path, manifest)
+
+
+def update_run_manifest_reasoning_layer(run_workspace: SubtopicRunWorkspace, reasoning_paths: dict[str, Any]) -> None:
+    manifest_path = run_workspace.run_dir / "manifest.json"
+    if not manifest_path.exists():
+        return
+    manifest = json.loads(read_text(manifest_path))
+    manifest["reasoning_layer"] = {
+        "generated_at": utc_now_iso(),
+        "reasoning_dir": str(reasoning_paths["reasoning_dir"]),
+        "readme": str(reasoning_paths["readme"]),
+        "brief_files": {
+            str(part_number): str(path)
+            for part_number, path in reasoning_paths["brief_files"].items()
+        },
+    }
+    write_json(manifest_path, manifest)
+
+
+def update_run_manifest_omission_audit(run_workspace: SubtopicRunWorkspace, omission_paths: dict[str, Any]) -> None:
+    manifest_path = run_workspace.run_dir / "manifest.json"
+    if not manifest_path.exists():
+        return
+    manifest = json.loads(read_text(manifest_path))
+    manifest["omission_audit"] = {
+        "generated_at": utc_now_iso(),
+        "audit_dir": str(omission_paths["audit_dir"]),
+        "readme": str(omission_paths["readme"]),
+        "snapshot_json": str(omission_paths["snapshot_json"]),
+        "brief_files": {
+            str(part_number): str(path)
+            for part_number, path in omission_paths["brief_files"].items()
+        },
+    }
+    write_json(manifest_path, manifest)
+
+
+def update_run_manifest_semantic_dedup(run_workspace: SubtopicRunWorkspace, dedup_paths: dict[str, Any]) -> None:
+    manifest_path = run_workspace.run_dir / "manifest.json"
+    if not manifest_path.exists():
+        return
+    manifest = json.loads(read_text(manifest_path))
+    manifest["semantic_dedup"] = {
+        "generated_at": utc_now_iso(),
+        "dedup_dir": str(dedup_paths["dedup_dir"]),
+        "readme": str(dedup_paths["readme"]),
+        "snapshot_json": str(dedup_paths["snapshot_json"]),
+        "brief_files": {
+            str(part_number): str(path)
+            for part_number, path in dedup_paths["brief_files"].items()
+        },
     }
     write_json(manifest_path, manifest)
 
@@ -1762,6 +2886,8 @@ def build_part_03_operator_sequence(run_workspace: SubtopicRunWorkspace) -> str:
 
 def build_part_03_message(run_workspace: SubtopicRunWorkspace, segment: dict[str, Any]) -> str:
     part_03_input = next(part.content.strip() for part in run_workspace.parts if part.number == 3)
+    literal_context_md = build_literal_context_bundle(run_workspace, 3)
+    reasoning_brief_md = build_reasoning_part_brief(run_workspace, 3)
     segment_start, segment_end = parse_roman_range_label(segment["label"])
     canonical_lines = []
     canonical_items = list(PART_03_CANONICAL_BLOCKS.items())[segment_start - 1 : segment_end]
@@ -1783,15 +2909,17 @@ def build_part_03_message(run_workspace: SubtopicRunWorkspace, segment: dict[str
     ]
     lines.extend(canonical_lines)
     lines.extend(["", "BLOCKER: любое переименование или подмена этих заголовков = ошибка.", ""])
-    if segment["segment_id"] == 1:
-        lines.extend(
-            [
-                "## Базовая инструкция Части 3",
-                "",
-                part_03_input,
-                "",
-            ]
-        )
+    lines.extend([reasoning_brief_md, ""])
+    if literal_context_md:
+        lines.extend([literal_context_md, ""])
+    lines.extend(
+        [
+            "## Базовая инструкция Части 3",
+            "",
+            part_03_input,
+            "",
+        ]
+    )
     lines.extend(
         [
             "## Активный запрос",
@@ -1877,7 +3005,11 @@ def build_subtopic_run_readme(run_workspace: SubtopicRunWorkspace) -> str:
         "## Web-first слой Части 2",
         "",
         "- `04-web-plan` хранит research pack, поисковые запросы, source cascade, research log и evidence.",
+        "- `04-web-plan/reasoning-layer` хранит reasoning-briefs по Частям 2–11 и усиливает интеллектуальный режим всего цикла.",
+        "- `04-web-plan/semantic-dedup` хранит смысловую карту повторов документов по ролям для Частей 5–8.",
+        "- `04-web-plan/omission-audit` хранит второй проход на пропуски для Частей 9–11 и подсветку слабых мест покрытия.",
         "- Этот слой нужен, чтобы агент или LLM не придумывали поисковые строки заново перед каждым прогоном.",
+        "- `04-web-plan/follow-up-parts` хранит буквальные continuation-пакеты для Частей 6–11 с уже накопленным контекстом предыдущих частей.",
         "- `04-web-plan/part-03` хранит сегментированный операторский план для Части 3 по диапазонам I–XXXVII.",
         "",
     ]
@@ -2609,6 +3741,8 @@ def build_part_04_operator_sequence(run_workspace: SubtopicRunWorkspace) -> str:
 
 def build_part_04_message(run_workspace: SubtopicRunWorkspace, segment: dict[str, Any]) -> str:
     part_04_input = next(part.content.strip() for part in run_workspace.parts if part.number == 4)
+    literal_context_md = build_literal_context_bundle(run_workspace, 4)
+    reasoning_brief_md = build_reasoning_part_brief(run_workspace, 4)
     subpoints = extract_part_31_subpoints(run_workspace.theme_workspace.master_prompt_text)
     range_start, range_end = parse_numeric_range_label(str(segment["label"]))
     range_lines: list[str] = []
@@ -2628,15 +3762,17 @@ def build_part_04_message(run_workspace: SubtopicRunWorkspace, segment: dict[str
         "- Все URL, домены и идентификаторы ресурсов держать только внутри fenced code blocks.",
         "",
     ]
-    if segment["segment_id"] == 1:
-        lines.extend(
-            [
-                "## Базовая инструкция Части 4",
-                "",
-                part_04_input,
-                "",
-            ]
-        )
+    lines.extend([reasoning_brief_md, ""])
+    if literal_context_md:
+        lines.extend([literal_context_md, ""])
+    lines.extend(
+        [
+            "## Базовая инструкция Части 4",
+            "",
+            part_04_input,
+            "",
+        ]
+    )
     if range_lines:
         lines.extend(
             [
@@ -2841,6 +3977,9 @@ def build_part_05_operator_sequence(run_workspace: SubtopicRunWorkspace) -> str:
 
 def build_part_05_message(run_workspace: SubtopicRunWorkspace, segment: dict[str, Any]) -> str:
     part_05_input = next(part.content.strip() for part in run_workspace.parts if part.number == 5)
+    literal_context_md = build_literal_context_bundle(run_workspace, 5)
+    reasoning_brief_md = build_reasoning_part_brief(run_workspace, 5)
+    semantic_dedup_md = build_semantic_dedup_brief(run_workspace, 5)
     lines = [
         f"# Part 05 Range {segment['segment_id']}: {segment['label']}",
         "",
@@ -2853,15 +3992,18 @@ def build_part_05_message(run_workspace: SubtopicRunWorkspace, segment: dict[str
         "- Все URL, домены и идентификаторы ресурсов держать только внутри fenced code blocks.",
         "",
     ]
-    if segment["segment_id"] == 1:
-        lines.extend(
-            [
-                "## Базовая инструкция Части 5",
-                "",
-                part_05_input,
-                "",
-            ]
-        )
+    lines.extend([reasoning_brief_md, ""])
+    lines.extend([semantic_dedup_md, ""])
+    if literal_context_md:
+        lines.extend([literal_context_md, ""])
+    lines.extend(
+        [
+            "## Базовая инструкция Части 5",
+            "",
+            part_05_input,
+            "",
+        ]
+    )
     lines.extend(
         [
             "## Активный запрос",
@@ -2942,7 +4084,7 @@ def build_part_01_response(run_workspace: SubtopicRunWorkspace) -> str:
         "Понимаю: запрещено домысливание, обобщение, подмена точного поиска \"похожими\" актами, упоминание документов без точного наименования и официального подтверждения, опора на устаревшие редакции, сужение охвата до 1–2 \"главных\" актов, а также вывод перечня до прохождения всех применимых слоёв и блоков.",
         "",
         "**Пункт 2. Обязательная проверка для каждого документа**  ",
-        "Понимаю: для каждого документа обязательны полное официальное наименование, вид, орган, дата, номер, статус действия, актуальность редакции, официальный источник, второй читабельный источник и структурный элемент; документ включается только при подтверждении существования и применимости, а отсутствие необязательных реквизитов само по себе не исключает документ.",
+        "Понимаю: для каждого документа обязательны полное официальное наименование, вид, орган, дата, номер, статус действия, актуальность редакции, официальный источник и структурный элемент; читабельный второй источник и его полная верификация желательны и усиливают карточку, но сами по себе не определяют право документа на включение, если существование, применимость и роль уже подтверждены.",
         "",
         "**Пункт 3. Сфера поиска**  ",
         "Понимаю: работа начинается не с перечня актов, а с анализа области права, юридических узлов темы и применимых кодексов/базовых актов; затем обязателен полный проход по блокам I–XXXVII с внутренней маркировкой \"применимо / не применимо\", с обязательной проверкой процессуального и налогово-финансового слоя, а также подзаконного, нотариального и судебно-разъяснительного слоя.",
@@ -2957,10 +4099,10 @@ def build_part_01_response(run_workspace: SubtopicRunWorkspace) -> str:
         "Понимаю: перед финалом обязателен anti-omit по слоям источников, включая кодифицированные акты, специальное нотариальное регулирование, процессуальный слой, подзаконные акты, акты нотариального сообщества и применимые разъяснения высшей судебной инстанции; если слой применим, но подтверждённый документ не найден, это отдельно фиксируется, а не замалчивается.",
         "",
         "**Пункт 7. Запуск задания и анти-отказ**  ",
-        "Понимаю: поиск по подтеме запускается только после завершения этапов I–II и сигнала `GO/СТАРТ`; ранняя остановка из-за \"сбоя\" запрещена; обязательна дожимка проверки до результата по каждому документу; критерий исполнения — закрытый цикл проверки с итогом `VERIFIED URL2=ДА` либо `КАРАНТИН` по конкретному документу.",
+        "Понимаю: поиск по подтеме запускается только после завершения этапов I–II и сигнала `GO/СТАРТ`; ранняя остановка из-за \"сбоя\" запрещена; обязательна дожимка проверки до результата по каждому документу; критерий исполнения — закрытый цикл проверки, в котором документ получает один из конечных статусов: подтвержден по существованию/применимости/роли и `URL1`, усилен `VERIFIED URL2`, либо помещен в `КАРАНТИН` при реальной неопределенности по самому документу.",
         "",
         "**Пункт 8. Правила ссылок**  ",
-        "Понимаю: перед выдачей каждой ссылки требуется открытие страницы и сверка реквизитов; `URL1` даётся как якорь официальности даже если неудобочитаем, `URL2` — только после проверки; при неподтверждении `URL2` документ не исключается, а оформляется в режиме карантина; все ссылки, идентификаторы ресурсов и блоки карантина в финальном ответе допустимы только внутри code-блоков.",
+        "Понимаю: перед выдачей каждой ссылки требуется открытие страницы и сверка реквизитов; `URL1` даётся как якорь официальности даже если неудобочитаем, `URL2` — только после проверки; при неподтверждении `URL2` документ не исключается автоматически, а сохраняется по своей роли с пометкой статуса верификации, если сам документ уже подтвержден; все ссылки, идентификаторы ресурсов и блоки карантина в финальном ответе допустимы только внутри code-блоков.",
         "",
         "II. Подтверждаю понимание логики и дословного режима исполнения.",
         "",
@@ -2974,7 +4116,7 @@ def build_part_01_response(run_workspace: SubtopicRunWorkspace) -> str:
         f"Нужно искать все актуальные и прямо применимые к подтеме `{subtopic_line}` нормативные акты и официальные документы по всей сфере поиска, а не только базовые кодексы и Основы законодательства о нотариате.",
         "",
         "**Что является обязательным**  ",
-        "Обязательны: анализ области права; проход по всем блокам сферы поиска; проверка применимости каждого слоя; карточка по каждому документу; структурный элемент; контроль актуальности; `URL1` как якорь официальности; `URL2` только после проверки; карантин при сомнении; блок слепых зон перед финалом.",
+        "Обязательны: анализ области права; проход по всем блокам сферы поиска; проверка применимости каждого слоя; карточка по каждому документу; структурный элемент; контроль актуальности; `URL1` как якорь официальности; `URL2` после проверки, когда это удается довести; явная пометка статуса верификации; карантин при сомнении в самом документе; блок слепых зон перед финалом.",
         "",
         "**Как начинать**  ",
         "Начинать нужно строго с Пункта 3: анализ области права, юридических узлов темы и применимых кодексов/базовых актов, с указанием структурных элементов. Только после этого допускается формирование перечня документов.",
@@ -2983,16 +4125,17 @@ def build_part_01_response(run_workspace: SubtopicRunWorkspace) -> str:
         "Алгоритм понимаю так: сначала выделяются объект регулирования, нотариальное действие, участники, порядок, сроки, платежи, ограничения, контроль, электронное взаимодействие и международный элемент; затем каждый из блоков I–XXXVII получает статус `применимо / не применимо`; по каждому применимому блоку либо находится минимум один подтверждённый документ, либо фиксируется fail-safe `не выявлено`.",
         "",
         "**Структура перечня, контроль, fail-safe, структурный элемент**  ",
-        "Перечень должен быть двухслойным: `A. РЕГУЛЯТОРНОЕ ЯДРО` и `B. ОПОРНЫЕ ДОКУМЕНТЫ`. Для каждого документа обязателен структурный элемент. Если структурный элемент не установлен точно, документ не выбрасывается автоматически, а выводится в карантине с пометкой о необходимости уточнения. Если подтверждены реквизиты, но не подтверждена читабельная вторая ссылка, документ сохраняется в выдаче с режимом карантина по этой ссылке.",
+        "Перечень должен быть двухслойным: `A. РЕГУЛЯТОРНОЕ ЯДРО` и `B. ОПОРНЫЕ ДОКУМЕНТЫ`. Для каждого документа обязателен структурный элемент. Если структурный элемент не установлен точно, документ не выбрасывается автоматически, а выводится в карантине с пометкой о необходимости уточнения. Если подтверждены существование, применимость, роль, реквизиты и `URL1`, но не подтверждена читабельная вторая ссылка, документ сохраняется в `A` или `B` по роли с пометкой статуса `VERIFIED URL2` и канонической строкой поиска.",
         "",
         "**Контроль галлюцинаций, карантин, слойность**  ",
-        "Слойность понимаю как обязательную проверку: Слой 1 — базовые кодифицированные и профильные акты; Слой 2 — специальное нотариальное регулирование; Слой 3 — процессуальный и контрольный слой; Слой 4 — подзаконные акты федеральных органов; Слой 5 — акты нотариального сообщества; Слой 6 — применимые судебные разъяснения. Если документ существует, но есть пробел в подтверждении ссылки, актуальности или структурного элемента, применяется карантин именно к документу, а не к теме целиком.",
+        "Слойность понимаю как обязательную проверку: Слой 1 — базовые кодифицированные и профильные акты; Слой 2 — специальное нотариальное регулирование; Слой 3 — процессуальный и контрольный слой; Слой 4 — подзаконные акты федеральных органов; Слой 5 — акты нотариального сообщества; Слой 6 — применимые судебные разъяснения. Если документ существует и применим, но есть пробел только в читабельной второй ссылке, он не уходит автоматически в карантин; карантин применяется при пробеле в самом документе, его роли, актуальности или структурном элементе.",
         "",
         "**Внутренняя проверка перед финалом**  ",
         "Перед выдачей нужно проверить три вещи по каждому документу: существует ли он реально, действует ли сейчас или подлежит применению нотариусом, есть ли официальный источник. При отрицательном ответе документ не может проходить как подтверждённый найденный документ.",
         "",
         "**Правила первой и второй ссылки**  ",
-        "Понимаю: `URL1` — якорь официальности, подлежит указанию даже если неудобочитаем; `URL2` — только после полного цикла проверки страницы и сверки реквизитов. При неподтверждении `URL2` документ не исключается, а сопровождается карантином и канонической строкой поиска. Все элементы ссылочного формата — только внутри code-блоков.",
+        "Понимаю: `URL1` — якорь официальности, подлежит указанию даже если неудобочитаем; `URL2` — только после полного цикла проверки страницы и сверки реквизитов. При неподтверждении `URL2` документ не исключается автоматически, а сохраняется в выдаче с пометками `VERIFIED URL2`, `Заголовок страницы URL2`, `Сверка реквизитов` и канонической строкой поиска; в карантин он уходит только если остается сомнение в самом документе. Все элементы ссылочного формата — только внутри code-блоков.",
+        "Дополнительно понимаю: режим `URL2: отсутствует (КАРАНТИН)` описывает только статус поля `URL2` внутри карточки документа и не равен автоматическому переносу самого документа в раздел `КАРАНТИН`.",
         "",
         "**Подтверждаю применение анти-отказа и запрета на незавершённую проверку**  ",
         "Подтверждаю: правило АО3 принимаю полностью. До исчерпания доступных веб-действий не допускается остановка под предлогом технической недоступности. Проверка по каждому документу должна быть доведена до конечного статуса по результату цикла, включая прямое открытие страниц и сверку заголовков, когда это доступно.",
@@ -3290,6 +4433,11 @@ def write_subtopic_run_files(run_workspace: SubtopicRunWorkspace) -> None:
     part_03_plan_paths = write_part_03_plan(run_workspace, overwrite=False)
     part_04_plan_paths = write_part_04_plan(run_workspace, overwrite=False)
     part_05_plan_paths = write_part_05_plan(run_workspace, overwrite=False)
+    followup_part_paths = write_followup_part_packets(run_workspace, overwrite=False)
+    reasoning_layer_paths = write_reasoning_layer(run_workspace, overwrite=False)
+    semantic_dedup_paths = write_semantic_dedup_layer(run_workspace, overwrite=False)
+    omission_audit_paths = write_omission_audit_layer(run_workspace, overwrite=False)
+    refresh_dynamic_part_packets(run_workspace)
     write_json(
         run_workspace.run_dir / "manifest.json",
         {
@@ -3349,6 +4497,40 @@ def write_subtopic_run_files(run_workspace: SubtopicRunWorkspace) -> None:
                 "message_files": {
                     str(segment_id): str(path)
                     for segment_id, path in part_05_plan_paths["message_files"].items()
+                },
+            },
+            "followup_part_packets": {
+                "plan_dir": str(followup_part_paths["plan_dir"]),
+                "readme": str(followup_part_paths["readme"]),
+                "message_files": {
+                    str(part_number): str(path)
+                    for part_number, path in followup_part_paths["message_files"].items()
+                },
+            },
+            "reasoning_layer": {
+                "reasoning_dir": str(reasoning_layer_paths["reasoning_dir"]),
+                "readme": str(reasoning_layer_paths["readme"]),
+                "brief_files": {
+                    str(part_number): str(path)
+                    for part_number, path in reasoning_layer_paths["brief_files"].items()
+                },
+            },
+            "semantic_dedup": {
+                "dedup_dir": str(semantic_dedup_paths["dedup_dir"]),
+                "readme": str(semantic_dedup_paths["readme"]),
+                "snapshot_json": str(semantic_dedup_paths["snapshot_json"]),
+                "brief_files": {
+                    str(part_number): str(path)
+                    for part_number, path in semantic_dedup_paths["brief_files"].items()
+                },
+            },
+            "omission_audit": {
+                "audit_dir": str(omission_audit_paths["audit_dir"]),
+                "readme": str(omission_audit_paths["readme"]),
+                "snapshot_json": str(omission_audit_paths["snapshot_json"]),
+                "brief_files": {
+                    str(part_number): str(path)
+                    for part_number, path in omission_audit_paths["brief_files"].items()
                 },
             },
             "parts": [
@@ -4196,6 +5378,7 @@ def cmd_execute_part_01(args: argparse.Namespace) -> int:
             )
     write_text(output_path, build_part_01_response(run_workspace))
     update_run_manifest_part_status(run_workspace, 1, "completed_waiting_for_go")
+    refresh_dynamic_part_packets(run_workspace)
     print(output_path)
     return 0
 
@@ -4245,6 +5428,7 @@ def cmd_capture_part_output(args: argparse.Namespace) -> int:
     else:
         status = "completed"
     update_run_manifest_part_status(run_workspace, part_number, status)
+    refresh_dynamic_part_packets(run_workspace)
 
     if part_number == 2 and args.auto_assemble:
         assemble_subtopic_final(run_workspace, publish=False)
@@ -4261,7 +5445,14 @@ def cmd_prepare_part_02_web(args: argparse.Namespace) -> int:
         theme_query=args.theme_query,
     )
     plan_paths = write_part_02_web_plan(run_workspace, overwrite=args.force)
+    reasoning_paths = write_reasoning_layer(run_workspace, overwrite=args.force)
+    semantic_dedup_paths = write_semantic_dedup_layer(run_workspace, overwrite=args.force)
+    omission_paths = write_omission_audit_layer(run_workspace, overwrite=args.force)
+    refresh_dynamic_part_packets(run_workspace)
     update_run_manifest_web_plan(run_workspace, plan_paths)
+    update_run_manifest_reasoning_layer(run_workspace, reasoning_paths)
+    update_run_manifest_semantic_dedup(run_workspace, semantic_dedup_paths)
+    update_run_manifest_omission_audit(run_workspace, omission_paths)
     print(plan_paths["web_plan_dir"])
     return 0
 
@@ -4274,7 +5465,14 @@ def cmd_prepare_part_03_plan(args: argparse.Namespace) -> int:
         theme_query=args.theme_query,
     )
     plan_paths = write_part_03_plan(run_workspace, overwrite=args.force)
+    reasoning_paths = write_reasoning_layer(run_workspace, overwrite=args.force)
+    semantic_dedup_paths = write_semantic_dedup_layer(run_workspace, overwrite=args.force)
+    omission_paths = write_omission_audit_layer(run_workspace, overwrite=args.force)
+    refresh_dynamic_part_packets(run_workspace)
     update_run_manifest_part_03_plan(run_workspace, plan_paths)
+    update_run_manifest_reasoning_layer(run_workspace, reasoning_paths)
+    update_run_manifest_semantic_dedup(run_workspace, semantic_dedup_paths)
+    update_run_manifest_omission_audit(run_workspace, omission_paths)
     print(plan_paths["plan_dir"])
     return 0
 
@@ -4308,6 +5506,7 @@ def cmd_capture_part_03_range(args: argparse.Namespace) -> int:
         update_run_manifest_part_status(run_workspace, 3, f"in_progress_segments_{len(captured)}_of_{len(PART_03_SEGMENTS)}")
     else:
         update_run_manifest_part_status(run_workspace, 3, "completed")
+    refresh_dynamic_part_packets(run_workspace)
     if args.auto_assemble:
         assemble_subtopic_final(run_workspace, publish=False)
     print(segment_output_path)
@@ -4356,6 +5555,7 @@ def cmd_capture_part_04_range(args: argparse.Namespace) -> int:
         update_run_manifest_part_status(run_workspace, 4, f"in_progress_segments_{len(captured)}_of_{len(PART_04_SEGMENTS)}")
     else:
         update_run_manifest_part_status(run_workspace, 4, "completed")
+    refresh_dynamic_part_packets(run_workspace)
     if args.auto_assemble:
         assemble_subtopic_final(run_workspace, publish=False)
     print(segment_output_path)
@@ -4404,6 +5604,7 @@ def cmd_capture_part_05_range(args: argparse.Namespace) -> int:
         update_run_manifest_part_status(run_workspace, 5, f"in_progress_segments_{len(captured)}_of_{len(PART_05_SEGMENTS)}")
     else:
         update_run_manifest_part_status(run_workspace, 5, "completed")
+    refresh_dynamic_part_packets(run_workspace)
     if args.auto_assemble:
         assemble_subtopic_final(run_workspace, publish=False)
     print(segment_output_path)
