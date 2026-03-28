@@ -5212,10 +5212,10 @@ def paragraph_element(
 
     if style == "title":
         spacing.set(f"{{{W_NS}}}before", "0")
-        spacing.set(f"{{{W_NS}}}after", "120")
-    elif style in {"section", "subsection"}:
-        spacing.set(f"{{{W_NS}}}before", "120")
         spacing.set(f"{{{W_NS}}}after", "80")
+    elif style in {"section", "subsection"}:
+        spacing.set(f"{{{W_NS}}}before", "80")
+        spacing.set(f"{{{W_NS}}}after", "40")
     elif style in {"code", "code-spacer"}:
         spacing.set(f"{{{W_NS}}}before", "0")
         spacing.set(f"{{{W_NS}}}after", "0")
@@ -5226,9 +5226,12 @@ def paragraph_element(
         shd.set(f"{{{W_NS}}}val", "clear")
         shd.set(f"{{{W_NS}}}color", "auto")
         shd.set(f"{{{W_NS}}}fill", "F3F3F3")
+    elif style == "spacer":
+        spacing.set(f"{{{W_NS}}}before", "0")
+        spacing.set(f"{{{W_NS}}}after", "0")
     else:
         spacing.set(f"{{{W_NS}}}before", "0")
-        spacing.set(f"{{{W_NS}}}after", "40")
+        spacing.set(f"{{{W_NS}}}after", "20")
 
     run = ET.SubElement(paragraph, f"{{{W_NS}}}r")
     r_pr = ET.SubElement(run, f"{{{W_NS}}}rPr")

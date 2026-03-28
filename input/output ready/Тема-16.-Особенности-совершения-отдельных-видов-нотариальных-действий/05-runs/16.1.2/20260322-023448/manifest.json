@@ -14,7 +14,7 @@
   "final_skeleton_md": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\03-final\\final.skeleton.md",
   "final_skeleton_docx": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\03-final\\final.skeleton.docx",
   "part_02_web_plan": {
-    "generated_at": "2026-03-21T22:36:23+00:00",
+    "generated_at": "2026-03-22T12:39:07+00:00",
     "web_plan_dir": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan",
     "operator_sequence": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\00-operator-sequence.md",
     "focus_json": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\focus.json",
@@ -32,6 +32,7 @@
     "evidence_dir": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\evidence"
   },
   "part_03_plan": {
+    "generated_at": "2026-03-22T12:39:16+00:00",
     "plan_dir": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\part-03",
     "operator_sequence": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\part-03\\00-operator-sequence.md",
     "capture_status": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\part-03\\capture-status.json",
@@ -47,6 +48,7 @@
     }
   },
   "part_04_plan": {
+    "generated_at": "2026-03-22T12:39:21+00:00",
     "plan_dir": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\part-04",
     "operator_sequence": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\part-04\\00-operator-sequence.md",
     "capture_status": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\part-04\\capture-status.json",
@@ -58,6 +60,7 @@
     }
   },
   "part_05_plan": {
+    "generated_at": "2026-03-22T12:39:26+00:00",
     "plan_dir": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\part-05",
     "operator_sequence": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\part-05\\00-operator-sequence.md",
     "capture_status": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\part-05\\capture-status.json",
@@ -158,5 +161,45 @@
       "output_file": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\02-stage-outputs\\part-11.md",
       "status": "blocked_until_go"
     }
-  ]
+  ],
+  "reasoning_layer": {
+    "generated_at": "2026-03-22T12:39:16+00:00",
+    "reasoning_dir": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\reasoning-layer",
+    "readme": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\reasoning-layer\\README.reasoning-layer.md",
+    "brief_files": {
+      "2": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\reasoning-layer\\part-02.reasoning.md",
+      "3": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\reasoning-layer\\part-03.reasoning.md",
+      "4": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\reasoning-layer\\part-04.reasoning.md",
+      "5": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\reasoning-layer\\part-05.reasoning.md",
+      "6": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\reasoning-layer\\part-06.reasoning.md",
+      "7": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\reasoning-layer\\part-07.reasoning.md",
+      "8": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\reasoning-layer\\part-08.reasoning.md",
+      "9": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\reasoning-layer\\part-09.reasoning.md",
+      "10": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\reasoning-layer\\part-10.reasoning.md",
+      "11": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\reasoning-layer\\part-11.reasoning.md"
+    }
+  },
+  "semantic_dedup": {
+    "generated_at": "2026-03-22T12:39:16+00:00",
+    "dedup_dir": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\semantic-dedup",
+    "readme": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\semantic-dedup\\README.semantic-dedup.md",
+    "snapshot_json": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\semantic-dedup\\semantic-dedup.snapshot.json",
+    "brief_files": {
+      "5": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\semantic-dedup\\part-05.semantic-dedup.md",
+      "6": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\semantic-dedup\\part-06.semantic-dedup.md",
+      "7": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\semantic-dedup\\part-07.semantic-dedup.md",
+      "8": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\semantic-dedup\\part-08.semantic-dedup.md"
+    }
+  },
+  "omission_audit": {
+    "generated_at": "2026-03-22T12:39:16+00:00",
+    "audit_dir": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\omission-audit",
+    "readme": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\omission-audit\\README.omission-audit.md",
+    "snapshot_json": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\omission-audit\\omission-audit.snapshot.json",
+    "brief_files": {
+      "9": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\omission-audit\\part-09.omission-audit.md",
+      "10": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\omission-audit\\part-10.omission-audit.md",
+      "11": "C:\\Users\\koper\\OneDrive\\Documents\\New project\\input\\output ready\\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\\05-runs\\16.1.2\\20260322-023448\\04-web-plan\\omission-audit\\part-11.omission-audit.md"
+    }
+  }
 }

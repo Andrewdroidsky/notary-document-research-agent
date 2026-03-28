@@ -8,8 +8,8 @@
 - Stage outputs: `C:\Users\koper\OneDrive\Documents\New project\input\output ready\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\05-runs\16.1.2\20260322-023448\02-stage-outputs`
 - Локальный final-dir: `C:\Users\koper\OneDrive\Documents\New project\input\output ready\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\05-runs\16.1.2\20260322-023448\03-final`
 - Web plan dir: `C:\Users\koper\OneDrive\Documents\New project\input\output ready\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\05-runs\16.1.2\20260322-023448\04-web-plan`
-- Канонический final md target: `C:\Users\koper\OneDrive\Documents\New project\input\output ready\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\04-output\md\16.1.2.md`
-- Канонический final docx target: `C:\Users\koper\OneDrive\Documents\New project\input\output ready\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\04-output\docx\16.1.2.docx`
+- Канонический final md target: `C:\Users\koper\OneDrive\Documents\New project\input\output ready\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\04-output\md\16.1.2. Исчисление размера федерального и.md`
+- Канонический final docx target: `C:\Users\koper\OneDrive\Documents\New project\input\output ready\Тема-16.-Особенности-совершения-отдельных-видов-нотариальных-действий\04-output\docx\16.1.2. Исчисление размера федерального и.docx`
 
 ## Ритм исполнения
 
@@ -22,5 +22,9 @@
 ## Web-first слой Части 2
 
 - `04-web-plan` хранит research pack, поисковые запросы, source cascade, research log и evidence.
+- `04-web-plan/reasoning-layer` хранит reasoning-briefs по Частям 2–11 и усиливает интеллектуальный режим всего цикла.
+- `04-web-plan/semantic-dedup` хранит смысловую карту повторов документов по ролям для Частей 5–8.
+- `04-web-plan/omission-audit` хранит второй проход на пропуски для Частей 9–11 и подсветку слабых мест покрытия.
 - Этот слой нужен, чтобы агент или LLM не придумывали поисковые строки заново перед каждым прогоном.
+- `04-web-plan/follow-up-parts` хранит буквальные continuation-пакеты для Частей 6–11 с уже накопленным контекстом предыдущих частей.
 - `04-web-plan/part-03` хранит сегментированный операторский план для Части 3 по диапазонам I–XXXVII.
