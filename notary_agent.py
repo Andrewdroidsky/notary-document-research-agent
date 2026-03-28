@@ -33,6 +33,10 @@ DEFAULT_OUTLINE_OVERRIDES_ROOT = Path("input/workflow/outline overrides")
 DEFAULT_OUTPUT_EXAMPLE_MD_PATH = Path("input/output examples/15.11.10. Наследование имущества.md")
 DEFAULT_OUTPUT_EXAMPLE_DOCX_PATH = Path("input/output examples/15.11.10. Наследование имущества.docx")
 DEFAULT_OUTPUT_READY_ROOT = Path("input/output ready")
+ARTIFACT_PROFILE_ENV = "NOTARY_AGENT_ARTIFACT_PROFILE"
+ARTIFACT_PROFILE_LEAN = "lean"
+ARTIFACT_PROFILE_FULL = "full"
+DEFAULT_ARTIFACT_PROFILE = os.environ.get(ARTIFACT_PROFILE_ENV, ARTIFACT_PROFILE_LEAN).strip().lower() or ARTIFACT_PROFILE_LEAN
 
 PART_EXECUTION_MODES = {
     1: "rules_confirmation_wait_go",
@@ -926,6 +930,26 @@ class SubtopicRunWorkspace:
     packet_text: str
     intro_block: str
     parts: list[OrderPart]
+    artifact_profile: str = ARTIFACT_PROFILE_LEAN
+
+    @property
+    def lean_artifacts(self) -> bool:
+        return self.artifact_profile != ARTIFACT_PROFILE_FULL
+
+
+def normalize_artifact_profile(value: str | None) -> str:
+    candidate = (value or DEFAULT_ARTIFACT_PROFILE).strip().lower()
+    if candidate not in {ARTIFACT_PROFILE_LEAN, ARTIFACT_PROFILE_FULL}:
+        return ARTIFACT_PROFILE_LEAN
+    return candidate
+
+
+def load_existing_run_artifact_profile(run_dir: Path) -> str:
+    manifest_path = run_dir / "manifest.json"
+    manifest = load_json_if_exists(manifest_path)
+    if not manifest:
+        return DEFAULT_ARTIFACT_PROFILE
+    return normalize_artifact_profile(manifest.get("artifact_profile"))
 
 
 def parse_main_theme_heading(value: str) -> tuple[str, str]:
@@ -2733,16 +2757,17 @@ def write_followup_part_packets(run_workspace: SubtopicRunWorkspace, overwrite: 
 
 
 def refresh_dynamic_part_packets(run_workspace: SubtopicRunWorkspace) -> None:
-    write_text(run_workspace.run_dir / "README.run.md", build_subtopic_run_readme(run_workspace))
+    if not run_workspace.lean_artifacts:
+        write_text(run_workspace.run_dir / "README.run.md", build_subtopic_run_readme(run_workspace))
 
-    reasoning_paths = build_reasoning_layer_paths(run_workspace)
-    reasoning_paths["reasoning_dir"].mkdir(parents=True, exist_ok=True)
-    write_text(reasoning_paths["readme"], build_reasoning_layer_readme(run_workspace))
-    for part_number in REASONING_LAYER_PART_NUMBERS:
-        write_text(
-            reasoning_paths["brief_files"][part_number],
-            build_reasoning_part_brief(run_workspace, part_number, heading_level="#"),
-        )
+        reasoning_paths = build_reasoning_layer_paths(run_workspace)
+        reasoning_paths["reasoning_dir"].mkdir(parents=True, exist_ok=True)
+        write_text(reasoning_paths["readme"], build_reasoning_layer_readme(run_workspace))
+        for part_number in REASONING_LAYER_PART_NUMBERS:
+            write_text(
+                reasoning_paths["brief_files"][part_number],
+                build_reasoning_part_brief(run_workspace, part_number, heading_level="#"),
+            )
 
     if PRODUCTION_ENABLE_SEMANTIC_DEDUP:
         semantic_dedup_paths = build_semantic_dedup_paths(run_workspace)
@@ -2770,35 +2795,36 @@ def refresh_dynamic_part_packets(run_workspace: SubtopicRunWorkspace) -> None:
     write_text(part_02_paths["launch_packet"], build_part_02_launch_packet(run_workspace))
     write_text(part_02_paths["message_03"], read_text(part_02_paths["launch_packet"]).rstrip() + "\n")
 
-    part_03_paths = build_part_03_plan_paths(run_workspace)
-    for segment in PART_03_SEGMENTS:
-        write_text(
-            part_03_paths["message_files"][segment["segment_id"]],
-            build_part_03_message(run_workspace, segment),
-        )
+    if not run_workspace.lean_artifacts:
+        part_03_paths = build_part_03_plan_paths(run_workspace)
+        for segment in PART_03_SEGMENTS:
+            write_text(
+                part_03_paths["message_files"][segment["segment_id"]],
+                build_part_03_message(run_workspace, segment),
+            )
 
-    part_04_paths = build_part_04_plan_paths(run_workspace)
-    for segment in PART_04_SEGMENTS:
-        write_text(
-            part_04_paths["message_files"][segment["segment_id"]],
-            build_part_04_message(run_workspace, segment),
-        )
+        part_04_paths = build_part_04_plan_paths(run_workspace)
+        for segment in PART_04_SEGMENTS:
+            write_text(
+                part_04_paths["message_files"][segment["segment_id"]],
+                build_part_04_message(run_workspace, segment),
+            )
 
-    part_05_paths = build_part_05_plan_paths(run_workspace)
-    for segment in PART_05_SEGMENTS:
-        write_text(
-            part_05_paths["message_files"][segment["segment_id"]],
-            build_part_05_message(run_workspace, segment),
-        )
+        part_05_paths = build_part_05_plan_paths(run_workspace)
+        for segment in PART_05_SEGMENTS:
+            write_text(
+                part_05_paths["message_files"][segment["segment_id"]],
+                build_part_05_message(run_workspace, segment),
+            )
 
-    followup_paths = build_followup_part_packet_paths(run_workspace)
-    followup_paths["plan_dir"].mkdir(parents=True, exist_ok=True)
-    write_text(followup_paths["readme"], build_followup_part_packets_readme(run_workspace))
-    for part_number in FOLLOWUP_LITERAL_PART_NUMBERS:
-        write_text(
-            followup_paths["message_files"][part_number],
-            build_followup_part_packet(run_workspace, part_number),
-        )
+        followup_paths = build_followup_part_packet_paths(run_workspace)
+        followup_paths["plan_dir"].mkdir(parents=True, exist_ok=True)
+        write_text(followup_paths["readme"], build_followup_part_packets_readme(run_workspace))
+        for part_number in FOLLOWUP_LITERAL_PART_NUMBERS:
+            write_text(
+                followup_paths["message_files"][part_number],
+                build_followup_part_packet(run_workspace, part_number),
+            )
 
 
 def write_part_02_web_plan(run_workspace: SubtopicRunWorkspace, overwrite: bool) -> dict[str, Path]:
@@ -2938,9 +2964,29 @@ def build_part_03_plan_paths(run_workspace: SubtopicRunWorkspace) -> dict[str, A
         "plan_dir": plan_dir,
         "readme": plan_dir / "README.part-03.md",
         "operator_sequence": plan_dir / "00-operator-sequence.md",
+        "canonical_skeleton": plan_dir / "part-03.canonical-skeleton.md",
         "capture_status": plan_dir / "capture-status.json",
         "message_files": message_files,
     }
+
+
+def build_part_03_canonical_skeleton() -> str:
+    lines = [
+        "# Part 03 Canonical Skeleton",
+        "",
+        "Использовать дословные заголовки VERSION 18. Статус блока и вывод `найдено/не выявлено` выносить в следующий абзац, а не в строку заголовка.",
+        "",
+    ]
+    for roman, title in PART_03_CANONICAL_BLOCKS.items():
+        lines.extend(
+            [
+                f"{roman}. {title}",
+                "Статус: [заполнить]",
+                "Документ(ы) / FAIL-SAFE: [заполнить]",
+                "",
+            ]
+        )
+    return "\n".join(lines)
 
 
 def build_part_03_readme(run_workspace: SubtopicRunWorkspace) -> str:
@@ -2951,6 +2997,7 @@ def build_part_03_readme(run_workspace: SubtopicRunWorkspace) -> str:
         "Этот каталог готовит сегментированное исполнение Части 3 по диапазонам блоков I–XXXVII.",
         "",
         f"- Operator sequence: `{paths['operator_sequence']}`",
+        f"- Canonical skeleton: `{paths['canonical_skeleton']}`",
         f"- Capture status: `{paths['capture_status']}`",
         f"- Aggregated output target: `{run_workspace.stage_outputs_dir / 'part-03.md'}`",
         "",
@@ -3058,6 +3105,7 @@ def write_part_03_plan(run_workspace: SubtopicRunWorkspace, overwrite: bool) -> 
     paths["plan_dir"].mkdir(parents=True, exist_ok=True)
     write_text_if_needed(paths["readme"], build_part_03_readme(run_workspace), overwrite)
     write_text_if_needed(paths["operator_sequence"], build_part_03_operator_sequence(run_workspace), overwrite)
+    write_text_if_needed(paths["canonical_skeleton"], build_part_03_canonical_skeleton(), overwrite)
     for segment in PART_03_SEGMENTS:
         write_text_if_needed(
             paths["message_files"][segment["segment_id"]],
@@ -3277,7 +3325,9 @@ def build_subtopic_run_workspace_for_dir(
     subtopic_id: str,
     run_dir: Path,
     render_orders: bool = True,
+    artifact_profile: str = DEFAULT_ARTIFACT_PROFILE,
 ) -> SubtopicRunWorkspace:
+    artifact_profile = normalize_artifact_profile(artifact_profile)
     if render_orders:
         render_generated_orders(theme_workspace)
     subtopic_entry = find_outline_entry(theme_workspace.outline_entries, subtopic_id)
@@ -3321,6 +3371,7 @@ def build_subtopic_run_workspace_for_dir(
         packet_text=packet_text,
         intro_block=intro_block,
         parts=parts,
+        artifact_profile=artifact_profile,
     )
 
 
@@ -3328,7 +3379,9 @@ def prepare_subtopic_run_workspace(
     workspace_root: Path,
     subtopic_id: str,
     theme_query: str | None = None,
+    artifact_profile: str = DEFAULT_ARTIFACT_PROFILE,
 ) -> SubtopicRunWorkspace:
+    artifact_profile = normalize_artifact_profile(artifact_profile)
     resolved_theme_query = theme_query or subtopic_id.split(".", 1)[0]
     theme_workspace = prepare_main_theme_workspace(workspace_root, resolved_theme_query)
     write_main_theme_context_files(theme_workspace)
@@ -3348,6 +3401,7 @@ def prepare_subtopic_run_workspace(
         subtopic_id,
         run_dir,
         render_orders=True,
+        artifact_profile=artifact_profile,
     )
 
 
@@ -3384,6 +3438,7 @@ def ensure_subtopic_run_workspace(
         subtopic_id,
         latest_run,
         render_orders=False,
+        artifact_profile=load_existing_run_artifact_profile(latest_run),
     )
 
 
@@ -3661,7 +3716,40 @@ def validate_part_output(run_workspace: SubtopicRunWorkspace, part_number: int, 
             if not has_structural_element_marker(quarantine_block):
                 issues.append("Part 2 quarantine entries must include a structural element marker")
 
+    if part_number == 3:
+        issues.extend(validate_part_03_canonical_structure(stripped))
+        missing_blocks = find_missing_canonical_part_03_blocks(stripped)
+        if missing_blocks:
+            issues.append(
+                "Part 3 is missing canonical VERSION 18 blocks: " + ", ".join(missing_blocks)
+            )
+
+    if part_number == 10:
+        items = extract_top_level_arabic_items(stripped)
+        if not items:
+            issues.append("Part 10 must contain a numbered mini-summary")
+        else:
+            expected = list(range(1, len(items) + 1))
+            if items != expected:
+                issues.append(
+                    f"Part 10 must use continuous numbering starting from 1 without restarts or gaps; found: {items}"
+                )
+            if not (10 <= len(items) <= 15):
+                issues.append(f"Part 10 must contain 10-15 numbered points; found: {len(items)}")
+
     return issues
+
+
+def extract_top_level_arabic_items(text: str) -> list[int]:
+    items: list[int] = []
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if stripped.startswith(("URL1:", "URL2:", "VERIFIED URL2:")):
+            continue
+        match = re.match(r"^(?P<number>\d+)\.\s+", stripped)
+        if match:
+            items.append(int(match.group("number")))
+    return items
 
 
 def extract_part_03_headings(text: str) -> list[tuple[str, str]]:
@@ -4450,6 +4538,7 @@ def assemble_subtopic_final(run_workspace: SubtopicRunWorkspace, publish: bool) 
     final_markdown = assemble_final_markdown_document(run_workspace, assembled_blocks)
     assembled_md = run_workspace.final_dir / "final.assembled.md"
     assembled_docx = run_workspace.final_dir / "final.assembled.docx"
+    refresh_master_working_file(run_workspace)
     write_text(assembled_md, final_markdown)
     replace_docx_body_with_text(
         run_workspace.theme_workspace.paths["output_example_docx"],
@@ -4586,25 +4675,27 @@ def write_subtopic_run_files(run_workspace: SubtopicRunWorkspace) -> None:
             build_part_output_stub(run_workspace.subtopic_entry.line, part, input_path),
         )
 
-    write_text(run_workspace.run_dir / "README.run.md", build_subtopic_run_readme(run_workspace))
-    write_text(run_workspace.final_dir / "README.final.md", build_final_contract_readme(run_workspace))
-    write_json(
-        run_workspace.final_dir / "final.contract.json",
-        build_final_output_contract(run_workspace),
-    )
-    final_skeleton_md = build_final_skeleton_markdown(run_workspace)
-    write_text(run_workspace.final_dir / "final.skeleton.md", final_skeleton_md)
-    replace_docx_body_with_text(
-        run_workspace.theme_workspace.paths["output_example_docx"],
-        run_workspace.final_dir / "final.skeleton.docx",
-        final_skeleton_md,
-    )
+    if not run_workspace.lean_artifacts:
+        write_text(run_workspace.run_dir / "README.run.md", build_subtopic_run_readme(run_workspace))
+        write_text(run_workspace.final_dir / "README.final.md", build_final_contract_readme(run_workspace))
+        write_json(
+            run_workspace.final_dir / "final.contract.json",
+            build_final_output_contract(run_workspace),
+        )
+        final_skeleton_md = build_final_skeleton_markdown(run_workspace)
+        write_text(run_workspace.final_dir / "final.skeleton.md", final_skeleton_md)
+        replace_docx_body_with_text(
+            run_workspace.theme_workspace.paths["output_example_docx"],
+            run_workspace.final_dir / "final.skeleton.docx",
+            final_skeleton_md,
+        )
+    master_working_md = refresh_master_working_file(run_workspace)
     web_plan_paths = write_part_02_web_plan(run_workspace, overwrite=False)
-    part_03_plan_paths = write_part_03_plan(run_workspace, overwrite=False)
-    part_04_plan_paths = write_part_04_plan(run_workspace, overwrite=False)
-    part_05_plan_paths = write_part_05_plan(run_workspace, overwrite=False)
-    followup_part_paths = write_followup_part_packets(run_workspace, overwrite=False)
-    reasoning_layer_paths = write_reasoning_layer(run_workspace, overwrite=False)
+    part_03_plan_paths = write_part_03_plan(run_workspace, overwrite=False) if not run_workspace.lean_artifacts else None
+    part_04_plan_paths = write_part_04_plan(run_workspace, overwrite=False) if not run_workspace.lean_artifacts else None
+    part_05_plan_paths = write_part_05_plan(run_workspace, overwrite=False) if not run_workspace.lean_artifacts else None
+    followup_part_paths = write_followup_part_packets(run_workspace, overwrite=False) if not run_workspace.lean_artifacts else None
+    reasoning_layer_paths = write_reasoning_layer(run_workspace, overwrite=False) if not run_workspace.lean_artifacts else None
     semantic_dedup_paths = (
         write_semantic_dedup_layer(run_workspace, overwrite=False)
         if PRODUCTION_ENABLE_SEMANTIC_DEDUP
@@ -4622,6 +4713,7 @@ def write_subtopic_run_files(run_workspace: SubtopicRunWorkspace) -> None:
             "generated_at": utc_now_iso(),
             "status": "subtopic_run_prepared",
             "run_mode": "fresh-only",
+            "artifact_profile": run_workspace.artifact_profile,
             "allow_reuse_stage_outputs": False,
             "theme_id": run_workspace.theme_workspace.theme.theme_id,
             "theme_title": run_workspace.theme_workspace.theme.full_title,
@@ -4632,9 +4724,7 @@ def write_subtopic_run_files(run_workspace: SubtopicRunWorkspace) -> None:
             "packet_file": str(run_workspace.packet_path),
             "canonical_final_md_target": str(run_workspace.final_md_target),
             "canonical_final_docx_target": str(run_workspace.final_docx_target),
-            "final_contract_file": str(run_workspace.final_dir / "final.contract.json"),
-            "final_skeleton_md": str(run_workspace.final_dir / "final.skeleton.md"),
-            "final_skeleton_docx": str(run_workspace.final_dir / "final.skeleton.docx"),
+            "master_working_md": str(master_working_md),
             "part_02_web_plan": {
                 "web_plan_dir": str(web_plan_paths["web_plan_dir"]),
                 "operator_sequence": str(web_plan_paths["operator_sequence"]),
@@ -4652,49 +4742,6 @@ def write_subtopic_run_files(run_workspace: SubtopicRunWorkspace) -> None:
                 "research_log": str(web_plan_paths["research_log"]),
                 "evidence_dir": str(web_plan_paths["evidence_dir"]),
             },
-            "part_03_plan": {
-                "plan_dir": str(part_03_plan_paths["plan_dir"]),
-                "operator_sequence": str(part_03_plan_paths["operator_sequence"]),
-                "capture_status": str(part_03_plan_paths["capture_status"]),
-                "message_files": {
-                    str(segment_id): str(path)
-                    for segment_id, path in part_03_plan_paths["message_files"].items()
-                },
-            },
-            "part_04_plan": {
-                "plan_dir": str(part_04_plan_paths["plan_dir"]),
-                "operator_sequence": str(part_04_plan_paths["operator_sequence"]),
-                "capture_status": str(part_04_plan_paths["capture_status"]),
-                "message_files": {
-                    str(segment_id): str(path)
-                    for segment_id, path in part_04_plan_paths["message_files"].items()
-                },
-            },
-            "part_05_plan": {
-                "plan_dir": str(part_05_plan_paths["plan_dir"]),
-                "operator_sequence": str(part_05_plan_paths["operator_sequence"]),
-                "capture_status": str(part_05_plan_paths["capture_status"]),
-                "message_files": {
-                    str(segment_id): str(path)
-                    for segment_id, path in part_05_plan_paths["message_files"].items()
-                },
-            },
-            "followup_part_packets": {
-                "plan_dir": str(followup_part_paths["plan_dir"]),
-                "readme": str(followup_part_paths["readme"]),
-                "message_files": {
-                    str(part_number): str(path)
-                    for part_number, path in followup_part_paths["message_files"].items()
-                },
-            },
-            "reasoning_layer": {
-                "reasoning_dir": str(reasoning_layer_paths["reasoning_dir"]),
-                "readme": str(reasoning_layer_paths["readme"]),
-                "brief_files": {
-                    str(part_number): str(path)
-                    for part_number, path in reasoning_layer_paths["brief_files"].items()
-                },
-            },
             "parts": [
                 {
                     "part_number": part.number,
@@ -4709,6 +4756,61 @@ def write_subtopic_run_files(run_workspace: SubtopicRunWorkspace) -> None:
             ],
         },
     )
+    manifest_path = run_workspace.run_dir / "manifest.json"
+    manifest = json.loads(read_text(manifest_path))
+    if not run_workspace.lean_artifacts:
+        manifest["final_contract_file"] = str(run_workspace.final_dir / "final.contract.json")
+        manifest["final_skeleton_md"] = str(run_workspace.final_dir / "final.skeleton.md")
+        manifest["final_skeleton_docx"] = str(run_workspace.final_dir / "final.skeleton.docx")
+        if part_03_plan_paths is not None:
+            manifest["part_03_plan"] = {
+                "plan_dir": str(part_03_plan_paths["plan_dir"]),
+                "operator_sequence": str(part_03_plan_paths["operator_sequence"]),
+                "capture_status": str(part_03_plan_paths["capture_status"]),
+                "message_files": {
+                    str(segment_id): str(path)
+                    for segment_id, path in part_03_plan_paths["message_files"].items()
+                },
+            }
+        if part_04_plan_paths is not None:
+            manifest["part_04_plan"] = {
+                "plan_dir": str(part_04_plan_paths["plan_dir"]),
+                "operator_sequence": str(part_04_plan_paths["operator_sequence"]),
+                "capture_status": str(part_04_plan_paths["capture_status"]),
+                "message_files": {
+                    str(segment_id): str(path)
+                    for segment_id, path in part_04_plan_paths["message_files"].items()
+                },
+            }
+        if part_05_plan_paths is not None:
+            manifest["part_05_plan"] = {
+                "plan_dir": str(part_05_plan_paths["plan_dir"]),
+                "operator_sequence": str(part_05_plan_paths["operator_sequence"]),
+                "capture_status": str(part_05_plan_paths["capture_status"]),
+                "message_files": {
+                    str(segment_id): str(path)
+                    for segment_id, path in part_05_plan_paths["message_files"].items()
+                },
+            }
+        if followup_part_paths is not None:
+            manifest["followup_part_packets"] = {
+                "plan_dir": str(followup_part_paths["plan_dir"]),
+                "readme": str(followup_part_paths["readme"]),
+                "message_files": {
+                    str(part_number): str(path)
+                    for part_number, path in followup_part_paths["message_files"].items()
+                },
+            }
+        if reasoning_layer_paths is not None:
+            manifest["reasoning_layer"] = {
+                "reasoning_dir": str(reasoning_layer_paths["reasoning_dir"]),
+                "readme": str(reasoning_layer_paths["readme"]),
+                "brief_files": {
+                    str(part_number): str(path)
+                    for part_number, path in reasoning_layer_paths["brief_files"].items()
+                },
+            }
+        write_json(manifest_path, manifest)
     if semantic_dedup_paths is not None:
         manifest_path = run_workspace.run_dir / "manifest.json"
         manifest = json.loads(read_text(manifest_path))
@@ -5181,9 +5283,30 @@ def normalize_final_part_content(content: str) -> str:
     return normalized
 
 
+def strip_leading_part_heading(content: str, part_number: int) -> str:
+    lines = content.splitlines()
+    if not lines:
+        return content
+
+    heading_re = re.compile(
+        rf"^\s*(?:#+\s*)?(?:\*+\s*)?ЧАСТЬ\s+{part_number}\.(?:\s+.+)?(?:\s*\*+)?\s*$",
+        re.IGNORECASE,
+    )
+    first_nonempty_idx = next((idx for idx, line in enumerate(lines) if line.strip()), None)
+    if first_nonempty_idx is None:
+        return content
+    if not heading_re.match(lines[first_nonempty_idx].strip()):
+        return content
+
+    remaining = lines[first_nonempty_idx + 1 :]
+    while remaining and not remaining[0].strip():
+        remaining = remaining[1:]
+    return "\n".join(remaining)
+
+
 def render_final_part_block(part_number: int, content: str) -> str:
     title = FINAL_PART_TITLES.get(part_number, f"ЧАСТЬ {part_number}")
-    normalized = normalize_final_part_content(content)
+    normalized = normalize_final_part_content(strip_leading_part_heading(content, part_number))
     return f"## ЧАСТЬ {part_number}. {title}\n\n{normalized}"
 
 
@@ -5199,6 +5322,69 @@ def assemble_final_markdown_document(
         lines.append(block)
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def build_master_working_markdown(run_workspace: SubtopicRunWorkspace) -> str:
+    lines = [f"# {run_workspace.subtopic_entry.line}", ""]
+    for part in run_workspace.parts:
+        if part.number == 1:
+            continue
+        output_path = run_workspace.stage_outputs_dir / part.filename
+        title = FINAL_PART_TITLES.get(part.number, f"ЧАСТЬ {part.number}")
+        lines.append(f"## ЧАСТЬ {part.number}. {title}")
+        lines.append("")
+        if output_path.exists():
+            content = read_text(output_path).strip()
+            if not is_response_stub(content):
+                if part.number == 3:
+                    content = sanitize_substantive_part_output(run_workspace, part.number, content).strip()
+                content = strip_leading_part_heading(content, part.number)
+                lines.append(normalize_final_part_content(content) if content else "[Пока не заполнено]")
+            else:
+                lines.append("[Пока не заполнено]")
+        else:
+            lines.append("[Пока не заполнено]")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def refresh_master_working_file(run_workspace: SubtopicRunWorkspace) -> Path:
+    master_path = run_workspace.final_dir / "working.master.md"
+    write_text(master_path, build_master_working_markdown(run_workspace))
+    return master_path
+
+
+def compute_text_metrics(text: str) -> dict[str, int]:
+    lines = text.splitlines()
+    words = len(re.findall(r"\S+", text))
+    chars = len(text)
+    url1 = sum(1 for line in lines if line.strip().startswith("URL1:"))
+    url2 = sum(1 for line in lines if line.strip().startswith("URL2:"))
+    verified_url2 = sum(1 for line in lines if line.strip().startswith("VERIFIED URL2:"))
+    document_cards = count_document_cards(text)
+    return {
+        "words": words,
+        "chars": chars,
+        "url1": url1,
+        "url2": url2,
+        "verified_url2": verified_url2,
+        "document_cards": document_cards,
+    }
+
+
+def read_docx_page_count(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    try:
+        with zipfile.ZipFile(path) as archive:
+            xml_bytes = archive.read("docProps/app.xml")
+        root = ET.fromstring(xml_bytes)
+        pages_node = root.find(".//Pages")
+        if pages_node is None or not (pages_node.text or "").strip():
+            return None
+        return int((pages_node.text or "").strip())
+    except Exception:
+        return None
 
 
 def paragraph_element(
@@ -5618,6 +5804,7 @@ def cmd_run_subtopic(args: argparse.Namespace) -> int:
         workspace_root=workspace_root,
         subtopic_id=args.subtopic_id,
         theme_query=args.theme_query,
+        artifact_profile=ARTIFACT_PROFILE_FULL if args.full_artifacts else ARTIFACT_PROFILE_LEAN,
     )
     write_subtopic_run_files(run_workspace)
     print(run_workspace.run_dir)
@@ -5646,6 +5833,7 @@ def cmd_execute_part_01(args: argparse.Namespace) -> int:
         source_origin="execute_part_01",
     )
     refresh_dynamic_part_packets(run_workspace)
+    refresh_master_working_file(run_workspace)
     print(output_path)
     return 0
 
@@ -5659,6 +5847,50 @@ def cmd_assemble_subtopic_final(args: argparse.Namespace) -> int:
     )
     assembled_md = assemble_subtopic_final(run_workspace, publish=args.publish)
     print(assembled_md)
+    return 0
+
+
+def cmd_metric_check(args: argparse.Namespace) -> int:
+    workspace_root = Path(args.workspace_root).resolve()
+    run_workspace = ensure_subtopic_run_workspace(
+        workspace_root=workspace_root,
+        subtopic_id=args.subtopic_id,
+        theme_query=args.theme_query,
+    )
+    target = (args.target or "master").strip().lower()
+    if target == "master":
+        source_path = refresh_master_working_file(run_workspace)
+        text = read_text(source_path)
+        page_count = None
+    elif target == "assembled":
+        source_path = run_workspace.final_dir / "final.assembled.md"
+        if not source_path.exists():
+            raise RuntimeError("Assembled markdown is missing. Run assemble-subtopic-final first.")
+        text = read_text(source_path)
+        page_count = read_docx_page_count(run_workspace.final_dir / "final.assembled.docx")
+    elif target == "published":
+        source_path = run_workspace.final_md_target
+        if not source_path.exists():
+            raise RuntimeError("Published markdown is missing. Run assemble-subtopic-final --publish first.")
+        text = read_text(source_path)
+        page_count = read_docx_page_count(run_workspace.final_docx_target)
+    else:
+        raise RuntimeError("target must be one of: master, assembled, published")
+
+    metrics = compute_text_metrics(text)
+    payload = {
+        "subtopic_id": run_workspace.subtopic_entry.item_id,
+        "target": target,
+        "source_path": str(source_path),
+        "words": metrics["words"],
+        "chars": metrics["chars"],
+        "url1": metrics["url1"],
+        "url2": metrics["url2"],
+        "verified_url2": metrics["verified_url2"],
+        "document_cards": metrics["document_cards"],
+        "page_count": page_count,
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -5701,6 +5933,7 @@ def cmd_capture_part_output(args: argparse.Namespace) -> int:
         source_origin="capture_part_output",
     )
     refresh_dynamic_part_packets(run_workspace)
+    refresh_master_working_file(run_workspace)
 
     if part_number == 2 and args.auto_assemble:
         assemble_subtopic_final(run_workspace, publish=False)
@@ -5999,6 +6232,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_subtopic.add_argument("subtopic_id")
     run_subtopic.add_argument("--theme-query")
     run_subtopic.add_argument("--workspace-root", default=".")
+    run_subtopic.add_argument("--full-artifacts", action="store_true")
     run_subtopic.set_defaults(func=cmd_run_subtopic)
 
     execute_part_01 = subparsers.add_parser(
@@ -6020,6 +6254,16 @@ def build_parser() -> argparse.ArgumentParser:
     assemble_subtopic_final_parser.add_argument("--workspace-root", default=".")
     assemble_subtopic_final_parser.add_argument("--publish", action="store_true")
     assemble_subtopic_final_parser.set_defaults(func=cmd_assemble_subtopic_final)
+
+    metric_check = subparsers.add_parser(
+        "metric-check",
+        help="Compute local metrics for master, assembled or published markdown/docx without using model tokens",
+    )
+    metric_check.add_argument("subtopic_id")
+    metric_check.add_argument("--theme-query")
+    metric_check.add_argument("--workspace-root", default=".")
+    metric_check.add_argument("--target", choices=["master", "assembled", "published"], default="master")
+    metric_check.set_defaults(func=cmd_metric_check)
 
     capture_part_output = subparsers.add_parser(
         "capture-part-output",

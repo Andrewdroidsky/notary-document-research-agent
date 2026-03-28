@@ -81,20 +81,23 @@ python .\notary_agent.py prepare-main-theme "Тема 16. Особенности
 python .\notary_agent.py run-subtopic 16.1.1
 ```
 
-Команда создаст пакет в `input\output ready\...\05-runs\<subtopic_id>\<timestamp>\`, включая:
+По умолчанию команда запускается в компактном `lean`-режиме и создает только минимально необходимый run-пакет для сильного end-to-end прохода без лишних служебных дублей.
+
+Базовый `lean`-пакет в `input\output ready\...\05-runs\<subtopic_id>\<timestamp>\` включает:
 
 - `00-context` — локальная копия обязательных входных файлов;
 - `01-stage-inputs` — вводный блок приказа и отдельные `part-01.md` ... `part-11.md`;
 - `02-stage-outputs` — stub-файлы под ответы по каждой Части;
-- `03-final` — локальный final-dir, `final.contract.json`, `final.skeleton.md` и `final.skeleton.docx`;
-- `04-web-plan` — web-first, literal-context и reasoning-layer слой: `00-operator-sequence`, `message-01`, `message-02`, `message-03`, `queries`, `source-cascade`, `part-02.research-pack`, `part-02.core-template`, `part-02.launch-packet`, `research-log`, `evidence`, `follow-up-parts`, `reasoning-layer`;
+- `03-final` — локальный final-dir для `working.master.md`, `final.assembled.md/.docx` и `assembly.report.json`;
+- `04-web-plan` — только обязательный web-first слой Части 2: `00-operator-sequence`, `message-01`, `message-02`, `message-03`, `queries`, `source-cascade`, `part-02.research-pack`, `part-02.core-template`, `part-02.launch-packet`, `research-log`, `evidence`;
 - `manifest.json` — статусы и режимы исполнения по всем 11 Частям.
 
 Если нужно явно указать основную тему, можно добавить `--theme-query`.
-
-`final.skeleton.md/.docx` фиксируют output contract до автоматизации Частей: ядро идет из Части 2, затем в финал последовательно встраиваются результаты Частей 3-11.
+Если для конкретной подтемы нужен прежний тяжелый пакет со skeleton/plan/reasoning/follow-up слоями, используйте `--full-artifacts`.
 
 Важно: финальный документ в этом проекте должен собираться максимально близко к прямому результату staged-взаимодействия с LLM. То есть цель агента не “переписать все заново красивее”, а получить качественные блоки по Частям и затем технически собрать их в принятый финальный `.md/.docx`.
+
+`working.master.md` — основной рабочий файл подтемы: агент обновляет его автоматически по мере захвата Частей, чтобы одна подтема жила в одном master-корпусе, а не в россыпи дублирующих промежуточных файлов.
 
 Актуальный стандарт финальной сборки:
 - в итоговом файле публикуются явные заголовки `ЧАСТЬ 2` ... `ЧАСТЬ 11`;
@@ -113,6 +116,16 @@ python .\notary_agent.py run-subtopic 16.1.1
 
 ```powershell
 python .\notary_agent.py prepare-part-02-web 16.1.1 --force
+```
+
+### Локальная проверка метрик
+
+Для контроля слов, знаков, `URL1`, `URL2`, `VERIFIED URL2`, карточек и `page count` без новых токенов модели использовать:
+
+```powershell
+python .\notary_agent.py metric-check 16.1.1 --target master
+python .\notary_agent.py metric-check 16.1.1 --target assembled
+python .\notary_agent.py metric-check 16.1.1 --target published
 ```
 
 Этот каталог нужен, чтобы Часть 2 не начиналась с ручного придумывания поисковых строк. Внутри лежат:
