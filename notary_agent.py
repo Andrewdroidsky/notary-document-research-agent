@@ -44,6 +44,10 @@ DEFAULT_PACKET_MODE = os.environ.get(PACKET_MODE_ENV, PACKET_MODE_LEAN).strip().
 RUN_MODE_FRESH = "fresh-only"
 RUN_MODE_SURGICAL = "surgical-redo"
 STRICT_ORCHESTRATION_TARGET_PERCENT = 3.0
+PUBLISH_MIN_WORDS = 16000
+PUBLISH_MIN_CHARS = 122000
+PUBLISH_MIN_URL1 = 100
+PUBLISH_MIN_URL2 = 100
 SURGICAL_ALLOWED_COMMANDS = {
     "capture-part-output",
     "prepare-part-02-web",
@@ -5178,6 +5182,7 @@ def assemble_subtopic_final(run_workspace: SubtopicRunWorkspace, publish: bool) 
             raise RuntimeError(
                 "Cannot publish this run as fresh-only: untrusted stage outputs detected: " + issues
             )
+        enforce_publish_metric_floor(final_markdown)
         write_text(run_workspace.final_md_target, final_markdown)
         replace_docx_body_with_text(
             run_workspace.theme_workspace.paths["output_example_docx"],
@@ -6021,6 +6026,33 @@ def compute_text_metrics(text: str) -> dict[str, int]:
     }
 
 
+def collect_publish_metric_shortfalls(metrics: dict[str, int]) -> list[str]:
+    shortfalls: list[str] = []
+    if metrics["words"] < PUBLISH_MIN_WORDS:
+        shortfalls.append(f"words<{PUBLISH_MIN_WORDS}")
+    if metrics["chars"] < PUBLISH_MIN_CHARS:
+        shortfalls.append(f"chars<{PUBLISH_MIN_CHARS}")
+    if metrics["url1"] < PUBLISH_MIN_URL1:
+        shortfalls.append(f"url1<{PUBLISH_MIN_URL1}")
+    if metrics["url2"] < PUBLISH_MIN_URL2:
+        shortfalls.append(f"url2<{PUBLISH_MIN_URL2}")
+    return shortfalls
+
+
+def enforce_publish_metric_floor(text: str) -> dict[str, int]:
+    metrics = compute_text_metrics(text)
+    shortfalls = collect_publish_metric_shortfalls(metrics)
+    if shortfalls:
+        raise RuntimeError(
+            "Метрики не достигнуты: "
+            f"{metrics['words']} слов, "
+            f"{metrics['url1']} URL1, "
+            f"{metrics['url2']} URL2. "
+            "Требуется добор документов."
+        )
+    return metrics
+
+
 def read_docx_page_count(path: Path) -> int | None:
     if not path.exists():
         return None
@@ -6577,6 +6609,33 @@ def cmd_assemble_subtopic_final(args: argparse.Namespace) -> int:
         theme_query=args.theme_query,
     )
     assert_run_command_allowed(run_workspace, "assemble-subtopic-final")
+    if args.publish:
+        assembled_md = assemble_subtopic_final(run_workspace, publish=False)
+        assembled_text = read_text(assembled_md)
+        metrics = compute_text_metrics(assembled_text)
+        shortfalls = collect_publish_metric_shortfalls(metrics)
+        pre_publish_payload = {
+            "subtopic_id": run_workspace.subtopic_entry.item_id,
+            "target": "pre-publish",
+            "source_path": str(assembled_md),
+            "words": metrics["words"],
+            "chars": metrics["chars"],
+            "url1": metrics["url1"],
+            "url2": metrics["url2"],
+            "verified_url2": metrics["verified_url2"],
+            "document_cards": metrics["document_cards"],
+            "publish_thresholds": {
+                "words": PUBLISH_MIN_WORDS,
+                "chars": PUBLISH_MIN_CHARS,
+                "url1": PUBLISH_MIN_URL1,
+                "url2": PUBLISH_MIN_URL2,
+            },
+            "publish_ready": not bool(shortfalls),
+            "shortfalls": shortfalls,
+        }
+        print(json.dumps(pre_publish_payload, ensure_ascii=False, indent=2))
+        if shortfalls:
+            enforce_publish_metric_floor(assembled_text)
     assembled_md = assemble_subtopic_final(run_workspace, publish=args.publish)
     print(assembled_md)
     return 0
