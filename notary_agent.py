@@ -1252,6 +1252,88 @@ def parse_outline_override_text(theme: ApprovedTheme, text: str) -> list[Outline
     return entries
 
 
+def get_next_subtopic(
+    workspace_root: Path,
+    theme_number: str,
+    current_subtopic_id: str,
+) -> OutlineEntry | None:
+    override_path = workspace_root / DEFAULT_OUTLINE_OVERRIDES_ROOT / f"{theme_number}.md"
+    if not override_path.exists():
+        raise FileNotFoundError(
+            f"Approved outline file is missing for theme {theme_number}: {override_path}"
+        )
+
+    text = read_text(override_path)
+    entries: list[OutlineEntry] = []
+    seen: set[str] = set()
+    pattern = re.compile(rf"^({re.escape(theme_number)}(?:\.\d+)+)\.\s*(.+)$")
+    for raw_line in text.splitlines():
+        cleaned = clean_markdown_text(raw_line)
+        match = pattern.match(cleaned)
+        if not match:
+            continue
+        item_id = match.group(1)
+        title = match.group(2).strip().rstrip(".")
+        if item_id in seen:
+            continue
+        seen.add(item_id)
+        entries.append(OutlineEntry(item_id=item_id, title=title))
+
+    if not entries:
+        raise ValueError(f"Approved outline for theme {theme_number} has no parsable subtopics")
+
+    for index, entry in enumerate(entries):
+        if entry.item_id != current_subtopic_id:
+            continue
+        next_index = index + 1
+        if next_index >= len(entries):
+            return None
+        return entries[next_index]
+
+    raise ValueError(
+        f"Current subtopic {current_subtopic_id} is not present in the approved outline for theme {theme_number}"
+    )
+
+
+def render_project_state_next_subtopic_line(
+    workspace_root: Path,
+    theme_number: str,
+    current_subtopic_id: str,
+) -> str:
+    next_entry = get_next_subtopic(workspace_root, theme_number, current_subtopic_id)
+    if next_entry is None:
+        return 'Следующая рабочая подтема по approved outline (для Kodeks-агента): "Тема завершена".'
+    return (
+        "Следующая рабочая подтема по approved outline (для Kodeks-агента): "
+        f"`{next_entry.line}`"
+    )
+
+
+def update_project_state_next_subtopic(
+    workspace_root: Path,
+    theme_number: str,
+    current_subtopic_id: str,
+    state_path: Path | None = None,
+) -> Path:
+    resolved_state_path = state_path or (workspace_root / DEFAULT_STATE_PATH)
+    state_text = read_text(resolved_state_path)
+    next_line = render_project_state_next_subtopic_line(
+        workspace_root=workspace_root,
+        theme_number=theme_number,
+        current_subtopic_id=current_subtopic_id,
+    )
+    pattern = re.compile(
+        r"(?m)^- Следующая рабочая подтема по approved outline \(для Kodeks-агента\): .*$"
+    )
+    if pattern.search(state_text):
+        updated = pattern.sub(f"- {next_line}", state_text, count=1)
+    else:
+        updated = state_text.rstrip() + f"\n- {next_line}\n"
+    if updated != state_text:
+        write_text(resolved_state_path, updated)
+    return resolved_state_path
+
+
 def resolve_outline_entries(
     theme: ApprovedTheme,
     theme_folder: Path,
@@ -6718,6 +6800,14 @@ def cmd_assemble_subtopic_final(args: argparse.Namespace) -> int:
         if shortfalls:
             enforce_publish_metric_floor(assembled_text)
     assembled_md = assemble_subtopic_final(run_workspace, publish=args.publish)
+    if args.publish:
+        theme_number = run_workspace.theme_workspace.theme.theme_id
+        current_subtopic_id = run_workspace.subtopic_entry.item_id
+        update_project_state_next_subtopic(
+            workspace_root=workspace_root,
+            theme_number=theme_number,
+            current_subtopic_id=current_subtopic_id,
+        )
     print(assembled_md)
     return 0
 
