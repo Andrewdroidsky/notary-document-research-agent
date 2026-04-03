@@ -237,6 +237,12 @@ PART_02_REQUIRED_MARKERS = [
     "FAIL-SAFE CHECK",
 ]
 
+PART2_ANALYSIS_MANDATE = """================================================================
+ОГРАНИЧЕНИЕ РАЗДЕЛА "АНАЛИЗ ОБЛАСТИ ПРАВА":
+НЕ БОЛЕЕ 10 СТРОК ВВОДНОГО ТЕКСТА. СРАЗУ ПЕРЕХОДИТЬ К ДОКУМЕНТАМ.
+ДЛИННЫЕ АНАЛИТИЧЕСКИЕ ВСТУПЛЕНИЯ ЗАПРЕЩЕНЫ.
+==============================================================="""
+
 FINAL_PART_TITLES = {
     2: "АНАЛИЗ ОБЛАСТИ ПРАВА",
     3: "БЛОКИ ПОИСКА СФЕР ПРАВА",
@@ -3248,6 +3254,8 @@ def build_followup_part_packet(run_workspace: SubtopicRunWorkspace, part_number:
         ]
     )
     packet_text = "\n".join(lines)
+    if part_number == 2:
+        packet_text += "\n\n" + PART2_ANALYSIS_MANDATE
     if part_number in (6, 7, 8):
         packet_text += "\n\n" + FOLLOWUP_SEARCH_MANDATE
     guard_no_canonical_inline(packet_text)
@@ -4325,6 +4333,14 @@ def validate_part_output(run_workspace: SubtopicRunWorkspace, part_number: int, 
     stripped = text.strip()
     if not stripped:
         return ["output is empty"]
+
+    if part_number in {9, 10}:
+        forbidden_sections = ["РАЗВЕРНУТЫЕ ПРАКТИЧЕСКИЕ МОДЕЛИ", "ПРАКТИЧЕСКИЕ МОДЕЛИ"]
+        for section in forbidden_sections:
+            if section in stripped.upper():
+                issues.append(
+                    f"Part {part_number} contains forbidden section: '{section}' — not in Prikas"
+                )
 
     if part_number == 1:
         if "ЖДУ СИГНАЛ GO" not in stripped:
