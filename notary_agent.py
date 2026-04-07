@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import html.parser
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -46,8 +47,13 @@ RUN_MODE_SURGICAL = "surgical-redo"
 STRICT_ORCHESTRATION_TARGET_PERCENT = 3.0
 PUBLISH_MIN_WORDS = 16000
 PUBLISH_MIN_CHARS = 122000
-PUBLISH_MIN_URL1 = 100
-PUBLISH_MIN_URL2 = 100
+# URL1 is advisory-only — quantity pressure drives hallucination (documented 07.04.2026).
+PUBLISH_TARGET_URL1 = 45
+PUBLISH_MIN_URL1 = PUBLISH_TARGET_URL1  # alias for manifest JSON readers
+# URL2: hard floor (blocks publish) + separate advisory target.
+# Floor=35 restores a meaningful quality gate without the hallucination pressure of 100.
+PUBLISH_MIN_URL2 = 35
+PUBLISH_TARGET_URL2 = 50  # advisory goal, logged as warning above the floor
 SURGICAL_ALLOWED_COMMANDS = {
     "capture-part-output",
     "prepare-part-02-web",
@@ -271,6 +277,32 @@ FOLLOWUP_SEARCH_MANDATE = """===================================================
 7) Далее — иные источники при необходимости.
 
 Правило: если после нового прохода новых документов не выявлено — зафиксировать явно: "новых документов по каскаду (1→7) не выявлено". Без нового прохода это заключение делать запрещено.
+================================================================"""
+
+WEBFETCH_MANDATE = """================================================================
+ОБЯЗАТЕЛЬНЫЙ МАНДАТ: WEB_FETCH ДО КАЖДОЙ КАРТОЧКИ
+
+ЗАПРЕЩЕНО писать карточку документа без предшествующего реального web_fetch.
+
+Порядок работы для каждого поискового блока — строго:
+1. Написать запрос прямо в тексте ответа: >>> ПОИСК: "запрос"
+2. Выполнить web_search / web_fetch — получить реальный результат страницы
+3. Написать прямо в тексте ответа: Продолжаю верификацию через web_fetch.
+4. Только после этого — написать карточку на основе реального результата
+
+Эти маркеры должны присутствовать ВНУТРИ текста Части — не как отдельные
+сообщения в чат, а прямо в теле ответа между блоками карточек. Они попадают
+в захват и проверяются автоматически. Отсутствие маркеров = блокировка захвата.
+
+Обязательная первая строка данной Части (сразу после строки ТЕМА:):
+[WEBFETCH-ДЕКЛАРАЦИЯ] Начинаю поиск документов по теме. Все URL2 получаю через
+web_fetch с реальных страниц. Ни одна ссылка не будет сконструирована из памяти модели.
+
+Обязательный последний блок данной Части:
+[WEBFETCH-ПОДТВЕРЖДЕНИЕ] Все URL2 в данной Части получены через web_fetch с реальных
+страниц источников. Каждая ссылка соответствует полному наименованию документа
+и структурному элементу, указанным в карточке. Ни одна ссылка не сконструирована
+и не взята из памяти модели.
 ================================================================"""
 
 FRESH_RUN_TRUSTED_SOURCE_ORIGINS = {
@@ -2186,6 +2218,8 @@ def build_part_02_launch_packet(run_workspace: SubtopicRunWorkspace) -> str:
     lines.extend(
         [
             "",
+            WEBFETCH_MANDATE,
+            "",
             "## Требование к ответу",
             "",
             "Верни только готовый ответ по Части 2 без пояснений вне структуры ответа.",
@@ -3256,6 +3290,8 @@ def build_followup_part_packet(run_workspace: SubtopicRunWorkspace, part_number:
     packet_text = "\n".join(lines)
     if part_number == 2:
         packet_text += "\n\n" + PART2_ANALYSIS_MANDATE
+    if 2 <= part_number <= 9:
+        packet_text += "\n\n" + WEBFETCH_MANDATE
     if part_number in (6, 7, 8):
         packet_text += "\n\n" + FOLLOWUP_SEARCH_MANDATE
     guard_no_canonical_inline(packet_text)
@@ -3711,6 +3747,8 @@ def build_part_03_message(run_workspace: SubtopicRunWorkspace, segment: dict[str
             "## Что вернуть",
             "",
             "Вернуть только ответ по этому диапазону Части 3 без перезапуска Части 2 и без перехода к следующему диапазону.",
+            "",
+            WEBFETCH_MANDATE,
             "",
         ]
     )
@@ -4501,6 +4539,609 @@ def split_document_blocks_by_full_name(text: str) -> list[str]:
     ]
 
 
+class _TitleFetcher(html.parser.HTMLParser):
+    """Minimal HTML parser that extracts the <title> tag content."""
+    def __init__(self) -> None:
+        super().__init__()
+        self._in_title = False
+        self.title: str = ""
+
+    def handle_starttag(self, tag: str, attrs: list) -> None:
+        if tag.lower() == "title":
+            self._in_title = True
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() == "title":
+            self._in_title = False
+
+    def handle_data(self, data: str) -> None:
+        if self._in_title:
+            self.title += data
+
+
+def _fetch_real_page_title(url: str, timeout: int = 8) -> tuple[str, str]:
+    """
+    Fetch the real <title> from a URL.
+    Returns (real_title, status) where status is one of:
+      "ok"          — fetched successfully
+      "blocked"     — 403/401/robots block
+      "not_found"   — 404
+      "error"       — other HTTP error or connection failure
+      "timeout"     — request timed out
+    """
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            charset = "utf-8"
+            ctype = resp.headers.get_content_charset()
+            if ctype:
+                charset = ctype
+            raw = resp.read(65536)  # первые 64 KB — достаточно для <title>
+            html_text = raw.decode(charset, errors="replace")
+            parser = _TitleFetcher()
+            parser.feed(html_text)
+            title = parser.title.strip()
+            return (title, "ok")
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            return ("", "blocked")
+        if e.code == 404:
+            return ("", "not_found")
+        return ("", "error")
+    except TimeoutError:
+        return ("", "timeout")
+    except Exception:
+        return ("", "error")
+
+
+def _titles_match(claimed: str, real: str) -> bool:
+    """
+    Fuzzy match: check if the claimed title meaningfully overlaps with the real title.
+    Returns True if ≥35% of significant words in claimed title appear in real title,
+    or if either is a substring of the other (case-insensitive).
+    """
+    if not claimed or not real:
+        return False
+    c = claimed.lower().strip()
+    r = real.lower().strip()
+    if c in r or r in c:
+        return True
+    stop = {"от", "об", "на", "по", "в", "к", "с", "и", "о", "или", "при", "для", "за",
+            "не", "до", "из", "а", "the", "of", "and", "in", "to", "for"}
+    c_words = [w for w in re.split(r"\W+", c) if len(w) > 2 and w not in stop]
+    r_words_set = set(re.split(r"\W+", r))
+    if not c_words:
+        return False
+    overlap = sum(1 for w in c_words if w in r_words_set)
+    return (overlap / len(c_words)) >= 0.35
+
+
+def verify_and_annotate_url2_titles(content: str) -> tuple[str, list[str]]:
+    """
+    Scan all cards in content for URL2 + «Заголовок страницы URL2».
+    For each URL2 that is NOT карантин/отсутствует:
+      1. Fetch the real page title via HTTP.
+      2. Compare with what the agent claimed.
+      3. Annotate the content in-place:
+         - MISMATCH  → VERIFIED URL2 line gets MISMATCH tag + real title appended
+         - НЕДОСТУПЕН → VERIFIED URL2 line gets НЕДОСТУПЕН tag (403/timeout/error)
+         - OK        → no change
+    Returns (modified_content, summary_lines).
+    """
+    url2_re = re.compile(
+        r"(?m)^([ \t]*URL2:\s*)"
+        r"(`?)((https?://[^\s`\n]+))`?",
+    )
+    title_field_re = re.compile(
+        r"(?m)^([ \t]*Заголовок страницы URL2:\s*)(.*)$"
+    )
+    verified_re = re.compile(
+        r"(?m)^([ \t]*VERIFIED URL2:\s*)(ДА|НЕТ|да|нет)(.*)$"
+    )
+
+    url_cache: dict[str, tuple[str, str]] = {}
+
+    def get_title(url: str) -> tuple[str, str]:
+        if url not in url_cache:
+            url_cache[url] = _fetch_real_page_title(url)
+        return url_cache[url]
+
+    full_text = content
+    mismatch_report: list[str] = []
+    unavailable_report: list[str] = []
+
+    for m_url in url2_re.finditer(full_text):
+        raw_url = m_url.group(3).rstrip(".,;)")
+        skip_values = {"[заполнить]", "", "отсутствует", "карантин"}
+        if any(s in raw_url.lower() for s in skip_values):
+            continue
+        if not raw_url.startswith("http"):
+            continue
+
+        real_title, fetch_status = get_title(raw_url)
+
+        url_pos = m_url.start()
+        card_start = full_text.rfind("Полное наименование:", 0, url_pos)
+        card_end_candidate = full_text.find("Полное наименование:", url_pos + 1)
+        card_end = card_end_candidate if card_end_candidate != -1 else len(full_text)
+        card_slice = full_text[card_start:card_end]
+
+        m_title = title_field_re.search(card_slice)
+        claimed_title = m_title.group(2).strip() if m_title else ""
+
+        if fetch_status == "blocked":
+            tag = "НЕДОСТУПЕН (сайт блокирует автопроверку)"
+            unavailable_report.append(f"  НЕДОСТУПЕН: {raw_url[:80]}")
+        elif fetch_status in ("timeout", "error"):
+            tag = f"НЕДОСТУПЕН ({fetch_status})"
+            unavailable_report.append(f"  НЕДОСТУПЕН ({fetch_status}): {raw_url[:80]}")
+        elif fetch_status == "not_found":
+            tag = "MISMATCH (404 — страница не найдена)"
+            mismatch_report.append(f"  404: {raw_url[:80]}")
+        elif fetch_status == "ok":
+            if not real_title:
+                tag = "НЕДОСТУПЕН (заголовок не извлечён)"
+                unavailable_report.append(f"  НЕДОСТУПЕН (пустой title): {raw_url[:80]}")
+            elif _titles_match(claimed_title, real_title):
+                tag = None
+            else:
+                tag = f"MISMATCH (реальный заголовок: «{real_title[:120]}»)"
+                mismatch_report.append(
+                    f"  MISMATCH: {raw_url[:80]}\n"
+                    f"    Заявлено: «{claimed_title[:80]}»\n"
+                    f"    Реально:  «{real_title[:80]}»"
+                )
+        else:
+            tag = None
+
+        if tag is None:
+            continue
+
+        m_verified = verified_re.search(card_slice)
+        if m_verified:
+            old_verified_line = m_verified.group(0)
+            new_verified_line = m_verified.group(1) + tag + m_verified.group(3)
+            patched_region = card_slice.replace(old_verified_line, new_verified_line, 1)
+            full_text = full_text[:card_start] + patched_region + full_text[card_end:]
+
+    summary_lines: list[str] = []
+    if mismatch_report or unavailable_report:
+        summary_lines.append("\n\n---\n**СВОДКА АВТОВЕРИФИКАЦИИ URL2**\n")
+        if mismatch_report:
+            summary_lines.append(
+                f"❌ MISMATCH ({len(mismatch_report)} карточек — "
+                f"проверьте ссылку вручную):\n" + "\n".join(mismatch_report)
+            )
+        if unavailable_report:
+            summary_lines.append(
+                f"\n⚠ НЕДОСТУПЕН для автопроверки ({len(unavailable_report)} карточек — "
+                f"сайт блокирует запросы или timeout):\n"
+                + "\n".join(unavailable_report)
+            )
+        summary_lines.append(
+            "\nДокументы с MISMATCH/НЕДОСТУПЕН оставлены в тексте. "
+            "URL2 требует ручной верификации перед финальной публикацией.\n---"
+        )
+
+    return full_text, summary_lines
+
+
+def _parse_url2_pairs(text: str) -> list[dict]:
+    """Extract URL2, expected_title, document name and structural element from each card."""
+    lines = text.splitlines()
+    pairs: list[dict] = []
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not re.match(r"^URL2:\s*\S", stripped):
+            continue
+        url_raw = re.sub(r"^URL2:\s*", "", stripped).strip().strip("`").strip()
+        if not url_raw.startswith("http"):
+            continue
+        expected_title = ""
+        for j in range(i + 1, min(i + 7, len(lines))):
+            if lines[j].strip().startswith("Заголовок страницы URL2:"):
+                expected_title = re.sub(r"^Заголовок страницы URL2:\s*", "", lines[j].strip())
+                break
+        doc_name = ""
+        struct_el = ""
+        for j in range(i - 1, max(i - 26, -1), -1):
+            s = lines[j].strip()
+            if not doc_name and s.startswith("Полное наименование:"):
+                doc_name = re.sub(r"^Полное наименование:\s*", "", s)
+            if not struct_el and s.startswith("Структурный элемент:"):
+                struct_el = re.sub(r"^Структурный элемент:\s*", "", s)
+            if doc_name and struct_el:
+                break
+        pairs.append({
+            "url2": url_raw,
+            "expected_title": expected_title,
+            "doc_name": doc_name,
+            "struct_el": struct_el,
+        })
+    return pairs
+
+
+def check_structural_elements_soft(content: str, part_number: int) -> list[str]:
+    """Soft (advisory) check: for each card whose URL2 is accessible, search the page
+    text for the declared structural element (статья X, пункт X.X, etc.).
+    Not found on accessible page → warning with doc name + struct_el + URL2.
+    Blocked/timeout pages → silently skipped (UNVERIFIED).
+    Never blocks capture — returns warnings only.
+    """
+    import concurrent.futures
+
+    if part_number < 2 or part_number > 9:
+        return []
+
+    pairs = _parse_url2_pairs(content)
+    pairs_with_struct = [p for p in pairs if p.get("struct_el") and p.get("url2")]
+    if not pairs_with_struct:
+        return []
+
+    def _fetch_page_text(url: str, timeout: int = 8) -> tuple[str, str]:
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                charset = resp.headers.get_content_charset() or "utf-8"
+                raw = resp.read(262144)
+                return (raw.decode(charset, errors="replace"), "ok")
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                return ("", "blocked")
+            return ("", "error")
+        except Exception:
+            return ("", "timeout")
+
+    def _struct_el_variants(struct_el: str) -> list[str]:
+        el = struct_el.strip()
+        variants = [el, el.lower()]
+        m = re.match(r"^(статья|пункт|часть|глава|раздел|параграф)\s+(\S+)", el, re.IGNORECASE)
+        if m:
+            keyword, num = m.group(1).lower(), m.group(2)
+            abbrevs = {"статья": ["ст.", "ст "], "пункт": ["п.", "п "], "часть": ["ч.", "ч "],
+                       "глава": ["гл.", "гл "], "раздел": ["разд.", "разд "], "параграф": ["§"]}
+            for abbr in abbrevs.get(keyword, []):
+                variants.append(f"{abbr}{num}")
+                variants.append(f"{abbr} {num}")
+        return variants
+
+    def _check_one(pair: dict) -> dict | None:
+        page_text, status = _fetch_page_text(pair["url2"])
+        if status != "ok" or not page_text:
+            return None
+        for variant in _struct_el_variants(pair["struct_el"]):
+            if variant in page_text or variant in page_text.lower():
+                return None
+        return pair
+
+    warnings = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(_check_one, p): p for p in pairs_with_struct}
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            if result:
+                warnings.append(
+                    f"⚠ Структурный элемент «{result['struct_el']}» не найден на странице:\n"
+                    f"  Полное наименование: {result['doc_name'] or '—'}\n"
+                    f"  URL2: {result['url2']}\n"
+                    f"  (страница доступна, но элемент не обнаружен в тексте — проверьте вручную)"
+                )
+    if warnings:
+        print(f"\n── Structural Element Check Часть {part_number}: "
+              f"{len(warnings)} предупреждений (не блокируют capture) ──")
+        for w in warnings:
+            print(w)
+    return warnings
+
+
+def check_url2_title_audit_at_capture(content: str, part_number: int) -> list[str]:
+    """Capture-time URL2 title audit (Parts 2–9).
+
+    Calls verify_and_annotate_url2_titles to fetch every URL2 and compare
+    actual <title> with declared 'Заголовок страницы URL2'.
+    MISMATCH = wrong document → RuntimeError (hard block).
+    UNVERIFIED/НЕДОСТУПЕН = 403/timeout → warning only.
+    """
+    if part_number < 2 or part_number > 9:
+        return []
+    _, summary_lines = verify_and_annotate_url2_titles(content)
+    if not summary_lines:
+        print(f"[url2-title-audit] Часть {part_number}: все URL2 OK.")
+        return []
+    summary = "".join(summary_lines)
+    # Count mismatches from summary
+    mismatch_count = summary.count("MISMATCH")
+    unavail_count = summary.count("НЕДОСТУПЕН")
+    print(f"\n── Capture URL2 AUDIT Часть {part_number} ──")
+    if unavail_count:
+        print(f"⚠  НЕДОСТУПЕН (403/таймаут): {unavail_count} ссылок — не блокирует.")
+    errors = []
+    if mismatch_count:
+        errors.append(
+            f"[url2-title-audit] БЛОК Часть {part_number}: {mismatch_count} URL2 ведут не на тот документ.\n"
+            f"Исправить карточки и повторить capture.\n{summary}"
+        )
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Anti-evasion defenses (web_fetch)
+# Three documented evasion patterns by Qwen (07.04.2026, subtopic 16.13.1):
+#   1. No web_fetch at all — research-log empty, cards filled from model memory
+#   2. Bypass validator — propose disabling check / reuse old run / write fake log manually
+#   3. Copy hallucinated titles from cards into research-log as fake fetch evidence
+# Defense 1 and 3 skip gracefully when research-log has no url_fetched/timestamp entries.
+# Defense 2 applies to all agents universally.
+# ---------------------------------------------------------------------------
+
+def validate_url2_against_research_log(text: str, research_log_path: Path) -> list[str]:
+    """Каждый URL2 в карточке должен иметь предшествующий web_search/web_fetch в research-log."""
+    issues: list[str] = []
+    if not research_log_path.exists() or research_log_path.stat().st_size == 0:
+        return ["research-log.jsonl отсутствует или пуст — невозможно проверить верификацию URL2"]
+
+    logged_urls: set[str] = set()
+    with open(research_log_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                for url_field in ["url", "url_fetched", "search_url", "fetch_url"]:
+                    if url_field in entry and entry[url_field]:
+                        logged_urls.add(entry[url_field])
+                for val in entry.values():
+                    if isinstance(val, str) and (val.startswith("http://") or val.startswith("https://")):
+                        logged_urls.add(val)
+            except json.JSONDecodeError:
+                continue
+
+    url2_pattern = re.compile(r"`(https?://[^`]+)`")
+    found_url2 = set(url2_pattern.findall(text))
+
+    for url in found_url2:
+        if url not in logged_urls:
+            matched = False
+            for logged in logged_urls:
+                if url in logged or logged in url:
+                    matched = True
+                    break
+            if not matched:
+                issues.append(
+                    f"URL2 `{url[:80]}...` не найден в research-log — нет подтверждения реального web_fetch. "
+                    f"Каждый URL2 должен быть подтверждён вызовом web_fetch перед записью в карточку."
+                )
+    return issues
+
+
+def check_research_log_url_authenticity(research_log_path: Path, sample_size: int = 5) -> list[str]:
+    """
+    Defense 1 — cross-check: sample url_fetched entries from research-log, fetch live,
+    verify pages actually exist (HTTP 200). Catches fake URLs inserted to pass
+    validate_url2_against_research_log without real fetching.
+    Skips silently if log contains only query entries (no url_fetched fields).
+    """
+    import random
+    if not research_log_path.exists() or research_log_path.stat().st_size == 0:
+        return []
+    urls: list[str] = []
+    with open(research_log_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                for field in ("url_fetched", "fetch_url", "url"):
+                    val = entry.get(field, "")
+                    if isinstance(val, str) and val.startswith("http"):
+                        urls.append(val)
+                        break
+            except json.JSONDecodeError:
+                continue
+    if not urls:
+        return []  # Only web_search query entries — skip.
+    sample = random.sample(urls, min(sample_size, len(urls)))
+    failed: list[str] = []
+    for url in sample:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                if resp.status == 404:
+                    failed.append(f"  404: {url[:80]}")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                failed.append(f"  404: {url[:80]}")
+        except Exception:
+            pass  # Timeout/blocked — not a fabrication signal.
+    if failed:
+        return [
+            f"[defense-1] БЛОК: {len(failed)} из {len(sample)} случайных URL из research-log вернули 404. "
+            f"Возможно, лог заполнен несуществующими URL без реального web_fetch.\n"
+            + "\n".join(failed)
+        ]
+    return []
+
+
+def check_tmp_generator_scripts(workspace_root: Path) -> list[str]:
+    """
+    Defense 2 — detect Python scripts in workspace root that write to research-log.
+    Catches the pattern: agent creates write_research_log.py / tmp_*.py to fabricate the log.
+    Applies to all agents (Claude Code, Qwen, Codex).
+    """
+    GENERATOR_KEYWORDS = (
+        "research-log",
+        "research_log",
+        "url_fetched",
+        "write.*research",
+        "research.*write",
+    )
+    suspicious: list[str] = []
+    try:
+        for py_file in workspace_root.glob("*.py"):
+            if py_file.name == "notary_agent.py":
+                continue
+            try:
+                text = py_file.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            for kw in GENERATOR_KEYWORDS:
+                if re.search(kw, text):
+                    suspicious.append(str(py_file.name))
+                    break
+    except Exception:
+        pass
+    if suspicious:
+        return [
+            f"[defense-2] БЛОК: обнаружены Python-скрипты в корне проекта, "
+            f"которые могут генерировать или перезаписывать research-log:\n  "
+            + "\n  ".join(suspicious)
+            + "\nУдалите эти файлы и повторите захват."
+        ]
+    return []
+
+
+def check_research_log_timestamp_clustering(research_log_path: Path) -> list[str]:
+    """
+    Defense 3 — detect timestamp clustering: if the entire research-log was written
+    in ≤30 seconds, or with perfectly uniform intervals, it was batch-generated.
+    Skips silently if log has fewer than 10 timestamped entries.
+    """
+    import datetime
+    if not research_log_path.exists() or research_log_path.stat().st_size == 0:
+        return []
+    timestamps: list[datetime.datetime] = []
+    with open(research_log_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                ts_raw = entry.get("timestamp", "")
+                if not ts_raw:
+                    continue
+                ts_raw = ts_raw.rstrip("Z").split("+")[0]
+                ts = datetime.datetime.fromisoformat(ts_raw)
+                timestamps.append(ts)
+            except (json.JSONDecodeError, ValueError):
+                continue
+    if len(timestamps) < 10:
+        return []
+    timestamps.sort()
+    span_seconds = (timestamps[-1] - timestamps[0]).total_seconds()
+    if span_seconds <= 30:
+        return [
+            f"[defense-3] БЛОК: {len(timestamps)} записей в research-log охватывают "
+            f"только {span_seconds:.0f} сек — лог сгенерирован пакетом, а не реальными поисками. "
+            "Выполните реальный web_search/web_fetch и повторите захват."
+        ]
+    if len(timestamps) >= 5:
+        intervals = [
+            (timestamps[i + 1] - timestamps[i]).total_seconds()
+            for i in range(len(timestamps) - 1)
+        ]
+        if intervals and max(intervals) - min(intervals) < 1.0:
+            return [
+                f"[defense-3] БЛОК: все интервалы между записями research-log одинаковы "
+                f"({intervals[0]:.0f} сек) — признак машинной генерации с постоянным шагом. "
+                "Выполните реальный web_search/web_fetch и повторите захват."
+            ]
+    return []
+
+
+# ---------------------------------------------------------------------------
+# Level 2 — Commitment protocol: search-before-card enforcement
+# ---------------------------------------------------------------------------
+
+SEARCH_DECLARATION_RE = re.compile(
+    r"(?:"
+    r">>>\s*ПОИСК"                                    # >>> ПОИСК: "запрос"
+    r"|>>>\s*SEARCH"                                   # >>> SEARCH: "query"
+    r"|\[ПОИСК\s*(?:#\d+)?\]"                        # [ПОИСК #3]
+    r"|WEB_SEARCH\s*[:(]"                             # WEB_SEARCH:
+    r"|web_search\s*\("                               # web_search(
+    r"|Запрос\s+#\d+\s*:"                            # Запрос #5:
+    r"|Продолжаю\s+верификацию\s+через\s+web_fetch"  # inline progress marker
+    r")",
+    re.IGNORECASE,
+)
+
+
+def check_search_grounding(content: str, part_number: int) -> list[str]:
+    """
+    Level 2 defense — commitment protocol. Strict 1:1 enforcement.
+
+    Every document card (URL1:) must have a corresponding search/progress marker.
+    search_count < card_count → hard block. No exceptions.
+    """
+    if part_number < 2 or part_number > 9:
+        return []
+    card_count = content.count("URL1:")
+    if card_count == 0:
+        return []
+    search_count = len(SEARCH_DECLARATION_RE.findall(content))
+    if search_count < card_count:
+        return [
+            f"[grounding-check] БЛОК Часть {part_number}: "
+            f"{card_count} карточек, {search_count} маркеров поиска. "
+            f"Требуется 1:1 — каждая карточка должна быть предварена маркером "
+            f"'>>> ПОИСК: ...' или 'Продолжаю верификацию через web_fetch'. "
+            f"Не хватает {card_count - search_count} маркеров. "
+            f"Переработать Часть: каждый документ — только после реального web_fetch."
+        ]
+    return []
+
+
+WEBFETCH_DECLARATION_RE = re.compile(r"\[WEBFETCH-ДЕКЛАРАЦИЯ\]", re.IGNORECASE)
+WEBFETCH_CONFIRMATION_RE = re.compile(r"\[WEBFETCH-ПОДТВЕРЖДЕНИЕ\]", re.IGNORECASE)
+
+
+def check_webfetch_protocol(content: str, part_number: int) -> list[str]:
+    """Hard blocking check for Parts 2–9.
+    Both [WEBFETCH-ДЕКЛАРАЦИЯ] and [WEBFETCH-ПОДТВЕРЖДЕНИЕ] must be present.
+    Their absence means the agent ignored the mandate — hard block, not advisory.
+    """
+    if part_number < 2 or part_number > 9:
+        return []
+    errors = []
+    if not WEBFETCH_DECLARATION_RE.search(content):
+        errors.append(
+            f"[webfetch-protocol] БЛОК Часть {part_number}: "
+            "отсутствует [WEBFETCH-ДЕКЛАРАЦИЯ]. "
+            "Агент обязан открыть Часть объявлением о web_fetch до первой карточки. "
+            "Переработать Часть с нуля, соблюдая мандат."
+        )
+    if not WEBFETCH_CONFIRMATION_RE.search(content):
+        errors.append(
+            f"[webfetch-protocol] БЛОК Часть {part_number}: "
+            "отсутствует [WEBFETCH-ПОДТВЕРЖДЕНИЕ]. "
+            "Агент обязан завершить Часть подтверждением: все URL2 получены через web_fetch, "
+            "каждая ссылка соответствует наименованию документа и структурному элементу. "
+            "Переработать Часть с нуля, соблюдая мандат."
+        )
+    return errors
+
+
 def validate_url2_presence_per_document_block(text: str, part_number: int) -> list[str]:
     issues: list[str] = []
     full_name_label = "Полное наименование:"
@@ -4859,6 +5500,8 @@ def build_part_04_message(run_workspace: SubtopicRunWorkspace, segment: dict[str
             "",
             "Вернуть только ответ по этому диапазону Части 4 без перезапуска предыдущих частей и без перехода к следующему диапазону.",
             "",
+            WEBFETCH_MANDATE,
+            "",
         ]
     )
     return "\n".join(lines)
@@ -5075,6 +5718,8 @@ def build_part_05_message(run_workspace: SubtopicRunWorkspace, segment: dict[str
             "## Что вернуть",
             "",
             "Вернуть только ответ по этому диапазону Части 5 без перезапуска предыдущих частей и без перехода к следующему диапазону.",
+            "",
+            WEBFETCH_MANDATE,
             "",
         ]
     )
@@ -6262,16 +6907,34 @@ def collect_publish_metric_shortfalls(
     *,
     skip_words_chars: bool = False,
 ) -> list[str]:
+    """Hard blocking shortfalls — words/chars + URL2 floor.
+    URL1 count is advisory-only (see collect_publish_metric_advisories).
+    URL2 floor=35 is a quality gate; pressure of 100 drove hallucination (documented 07.04.2026).
+    """
     shortfalls: list[str] = []
     if not skip_words_chars and metrics["words"] < PUBLISH_MIN_WORDS:
         shortfalls.append(f"words<{PUBLISH_MIN_WORDS}")
     if not skip_words_chars and metrics["chars"] < PUBLISH_MIN_CHARS:
         shortfalls.append(f"chars<{PUBLISH_MIN_CHARS}")
-    if metrics["url1"] < PUBLISH_MIN_URL1:
-        shortfalls.append(f"url1<{PUBLISH_MIN_URL1}")
     if metrics["url2"] < PUBLISH_MIN_URL2:
         shortfalls.append(f"url2<{PUBLISH_MIN_URL2}")
     return shortfalls
+
+
+def collect_publish_metric_advisories(metrics: dict[str, int]) -> list[str]:
+    """Advisory URL count checks — printed as warnings but do NOT block publish."""
+    advisories: list[str] = []
+    if metrics["url1"] < PUBLISH_TARGET_URL1:
+        advisories.append(
+            f"[advisory] URL1={metrics['url1']} (цель ≥{PUBLISH_TARGET_URL1}). "
+            "Ниже целевого — это предупреждение, публикация не блокируется."
+        )
+    if metrics["url2"] < PUBLISH_TARGET_URL2:
+        advisories.append(
+            f"[advisory] URL2={metrics['url2']} (цель ≥{PUBLISH_TARGET_URL2}). "
+            "Ниже целевого — это предупреждение, публикация не блокируется."
+        )
+    return advisories
 
 
 def enforce_publish_metric_floor(
@@ -6305,6 +6968,9 @@ def enforce_publish_metric_floor(
             f"{metrics['url2']} URL2. "
             "Требуется добор документов."
         )
+    advisories = collect_publish_metric_advisories(metrics)
+    for adv in advisories:
+        print(adv)
     return metrics
 
 
@@ -6973,8 +7639,40 @@ def cmd_capture_part_output(args: argparse.Namespace) -> int:
         raise RuntimeError("part_number must be between 1 and 11")
     assert_run_command_allowed(run_workspace, "capture-part-output", part_number=part_number)
 
+    # Anti-evasion defenses (Defense 1–3). Defense 2 applies universally.
+    # Defense 1 and 3 skip gracefully when research-log has no url_fetched/timestamp entries.
+    if part_number >= 2:
+        research_log_path = run_workspace.web_plan_dir / "research-log.jsonl"
+        # Defense 2: detect generator scripts (no network, runs first)
+        d2_issues = check_tmp_generator_scripts(workspace_root)
+        if d2_issues:
+            raise RuntimeError("\n".join(d2_issues))
+        # Defense 3: detect batch-generated timestamps (no network)
+        d3_issues = check_research_log_timestamp_clustering(research_log_path)
+        if d3_issues:
+            raise RuntimeError("\n".join(d3_issues))
+        # Defense 1: live HTTP sample of url_fetched entries (network, last)
+        d1_issues = check_research_log_url_authenticity(research_log_path)
+        if d1_issues:
+            raise RuntimeError("\n".join(d1_issues))
+
     content = load_part_output_source(args.source_file, args.clipboard)
     content = normalize_part_output(part_number, content)
+
+    # WebFetch protocol: hard block if mandatory declaration/confirmation markers are missing.
+    webfetch_errors = check_webfetch_protocol(content, part_number)
+    if webfetch_errors:
+        raise RuntimeError("\n".join(webfetch_errors))
+
+    # Level 2 — commitment protocol: 1:1 hard block.
+    grounding_errors = check_search_grounding(content, part_number)
+    if grounding_errors:
+        raise RuntimeError("\n".join(grounding_errors))
+
+    url2_issues = validate_url2_against_research_log(content, research_log_path)
+    if url2_issues:
+        raise RuntimeError("\n".join(url2_issues))
+
     foreign_subtopic_ids = find_foreign_subtopic_ids(content, run_workspace.subtopic_entry.item_id)
     if foreign_subtopic_ids:
         raise RuntimeError(
@@ -6991,6 +7689,26 @@ def cmd_capture_part_output(args: argparse.Namespace) -> int:
             validation_passed=False,
         )
         raise RuntimeError("Part output validation failed:\n- " + "\n- ".join(issues))
+
+    # Capture-time title audit: MISMATCH → hard block, UNVERIFIED → warning.
+    title_audit_errors = check_url2_title_audit_at_capture(content, part_number)
+    if title_audit_errors:
+        raise RuntimeError("\n".join(title_audit_errors))
+    check_structural_elements_soft(content, part_number)
+
+    # Живая верификация URL2: Python сам открывает каждую ссылку и сравнивает
+    # реальный <title> страницы с тем что агент написал в «Заголовок страницы URL2».
+    # Документы с MISMATCH/НЕДОСТУПЕН остаются в тексте, но получают явную пометку.
+    if part_number >= 2:
+        print(f"[url2-verify] Запуск живой верификации URL2 для Части {part_number}...")
+        content, url2_summary = verify_and_annotate_url2_titles(content)
+        if url2_summary:
+            content = content.rstrip() + "\n" + "".join(url2_summary)
+            print(f"[url2-verify] {'=' * 60}")
+            print("".join(url2_summary))
+            print(f"[url2-verify] {'=' * 60}")
+        else:
+            print("[url2-verify] Все проверенные URL2 — OK.")
 
     output_path = run_workspace.stage_outputs_dir / f"part-{part_number:02d}.md"
     write_text(output_path, content.rstrip() + "\n")
@@ -7084,9 +7802,28 @@ def cmd_capture_part_03_range(args: argparse.Namespace) -> int:
         theme_query=args.theme_query,
     )
     assert_run_command_allowed(run_workspace, "capture-part-03-range", part_number=3)
+    research_log_path = run_workspace.web_plan_dir / "research-log.jsonl"
+    d2_issues = check_tmp_generator_scripts(workspace_root)
+    if d2_issues:
+        raise RuntimeError("\n".join(d2_issues))
+    d3_issues = check_research_log_timestamp_clustering(research_log_path)
+    if d3_issues:
+        raise RuntimeError("\n".join(d3_issues))
+    d1_issues = check_research_log_url_authenticity(research_log_path)
+    if d1_issues:
+        raise RuntimeError("\n".join(d1_issues))
     segment = get_part_03_segment(int(args.segment_id))
     content = load_part_output_source(args.source_file, args.clipboard)
     content = normalize_part_output(3, content)
+    webfetch_errors = check_webfetch_protocol(content, 3)
+    if webfetch_errors:
+        raise RuntimeError("\n".join(webfetch_errors))
+    grounding_errors = check_search_grounding(content, 3)
+    if grounding_errors:
+        raise RuntimeError("\n".join(grounding_errors))
+    url2_issues = validate_url2_against_research_log(content, research_log_path)
+    if url2_issues:
+        raise RuntimeError("\n".join(url2_issues))
     foreign_subtopic_ids = find_foreign_subtopic_ids(content, run_workspace.subtopic_entry.item_id)
     if foreign_subtopic_ids:
         raise RuntimeError(
@@ -7096,6 +7833,10 @@ def cmd_capture_part_03_range(args: argparse.Namespace) -> int:
     issues = validate_part_03_segment_output(content)
     if issues:
         raise RuntimeError("Part 3 range validation failed:\n- " + "\n- ".join(issues))
+    title_audit_errors = check_url2_title_audit_at_capture(content, 3)
+    if title_audit_errors:
+        raise RuntimeError("\n".join(title_audit_errors))
+    check_structural_elements_soft(content, 3)
 
     segment_output_path = get_part_03_segment_output_path(run_workspace, segment["segment_id"])
     write_text(segment_output_path, content.rstrip() + "\n")
@@ -7146,9 +7887,28 @@ def cmd_capture_part_04_range(args: argparse.Namespace) -> int:
         theme_query=args.theme_query,
     )
     assert_run_command_allowed(run_workspace, "capture-part-04-range", part_number=4)
+    research_log_path = run_workspace.web_plan_dir / "research-log.jsonl"
+    d2_issues = check_tmp_generator_scripts(workspace_root)
+    if d2_issues:
+        raise RuntimeError("\n".join(d2_issues))
+    d3_issues = check_research_log_timestamp_clustering(research_log_path)
+    if d3_issues:
+        raise RuntimeError("\n".join(d3_issues))
+    d1_issues = check_research_log_url_authenticity(research_log_path)
+    if d1_issues:
+        raise RuntimeError("\n".join(d1_issues))
     segment = get_part_04_segment(int(args.segment_id))
     content = load_part_output_source(args.source_file, args.clipboard)
     content = normalize_part_output(4, content)
+    webfetch_errors = check_webfetch_protocol(content, 4)
+    if webfetch_errors:
+        raise RuntimeError("\n".join(webfetch_errors))
+    grounding_errors = check_search_grounding(content, 4)
+    if grounding_errors:
+        raise RuntimeError("\n".join(grounding_errors))
+    url2_issues = validate_url2_against_research_log(content, research_log_path)
+    if url2_issues:
+        raise RuntimeError("\n".join(url2_issues))
     foreign_subtopic_ids = find_foreign_subtopic_ids(content, run_workspace.subtopic_entry.item_id)
     if foreign_subtopic_ids:
         raise RuntimeError(
@@ -7158,6 +7918,10 @@ def cmd_capture_part_04_range(args: argparse.Namespace) -> int:
     issues = validate_part_04_segment_output(content)
     if issues:
         raise RuntimeError("Part 4 range validation failed:\n- " + "\n- ".join(issues))
+    title_audit_errors = check_url2_title_audit_at_capture(content, 4)
+    if title_audit_errors:
+        raise RuntimeError("\n".join(title_audit_errors))
+    check_structural_elements_soft(content, 4)
 
     segment_output_path = get_part_04_segment_output_path(run_workspace, segment["segment_id"])
     write_text(segment_output_path, content.rstrip() + "\n")
@@ -7207,9 +7971,28 @@ def cmd_capture_part_05_range(args: argparse.Namespace) -> int:
         theme_query=args.theme_query,
     )
     assert_run_command_allowed(run_workspace, "capture-part-05-range", part_number=5)
+    research_log_path = run_workspace.web_plan_dir / "research-log.jsonl"
+    d2_issues = check_tmp_generator_scripts(workspace_root)
+    if d2_issues:
+        raise RuntimeError("\n".join(d2_issues))
+    d3_issues = check_research_log_timestamp_clustering(research_log_path)
+    if d3_issues:
+        raise RuntimeError("\n".join(d3_issues))
+    d1_issues = check_research_log_url_authenticity(research_log_path)
+    if d1_issues:
+        raise RuntimeError("\n".join(d1_issues))
     segment = get_part_05_segment(int(args.segment_id))
     content = load_part_output_source(args.source_file, args.clipboard)
     content = normalize_part_output(5, content)
+    webfetch_errors = check_webfetch_protocol(content, 5)
+    if webfetch_errors:
+        raise RuntimeError("\n".join(webfetch_errors))
+    grounding_errors = check_search_grounding(content, 5)
+    if grounding_errors:
+        raise RuntimeError("\n".join(grounding_errors))
+    url2_issues = validate_url2_against_research_log(content, research_log_path)
+    if url2_issues:
+        raise RuntimeError("\n".join(url2_issues))
     foreign_subtopic_ids = find_foreign_subtopic_ids(content, run_workspace.subtopic_entry.item_id)
     if foreign_subtopic_ids:
         raise RuntimeError(
@@ -7219,6 +8002,10 @@ def cmd_capture_part_05_range(args: argparse.Namespace) -> int:
     issues = validate_part_05_segment_output(content)
     if issues:
         raise RuntimeError("Part 5 range validation failed:\n- " + "\n- ".join(issues))
+    title_audit_errors = check_url2_title_audit_at_capture(content, 5)
+    if title_audit_errors:
+        raise RuntimeError("\n".join(title_audit_errors))
+    check_structural_elements_soft(content, 5)
 
     segment_output_path = get_part_05_segment_output_path(run_workspace, segment["segment_id"])
     write_text(segment_output_path, content.rstrip() + "\n")
