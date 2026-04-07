@@ -297,6 +297,12 @@ WEBFETCH_MANDATE = """==========================================================
 Только fetch-and-log создаёт доверенные записи (fetched_by_agent=true).
 Записи без fetched_by_agent=true блокируют захват.
 
+При MISMATCH заголовка: причина — URL ведёт на весь документ, а не на конкретную статью.
+Решение: используй URL конкретной статьи с якорем-хэшем.
+  НЕВЕРНО: URL2: `https://www.consultant.ru/document/cons_doc_LAW_39570/`
+  ВЕРНО:   URL2: `https://www.consultant.ru/document/cons_doc_LAW_39570/cabd43bd.../`
+fetch-and-log вернёт заголовок статьи — вставь его в «Заголовок страницы URL2».
+
 Эти маркеры должны присутствовать ВНУТРИ текста Части — не как отдельные
 сообщения в чат, а прямо в теле ответа между блоками карточек. Они попадают
 в захват и проверяются автоматически. Отсутствие маркеров = блокировка захвата.
@@ -4688,11 +4694,25 @@ def _fetch_real_page_title(url: str, timeout: int = 8) -> tuple[str, str]:
         return ("", "error")
 
 
+_DOC_CODE_RE = re.compile(
+    r"\b(гк|гпк|апк|упк|нк|кас|тк|жк|зк|уик|бк|кис)\s*рф\b"
+    r"|\bосновы\s+законодательства\b"
+    r"|\bфедеральн\w+\s+закон\b",
+    re.IGNORECASE,
+)
+_LAW_NUM_RE = re.compile(r"\b\d+\s*[-–]\s*фз\b|\b\d+\s*[-–]\s*фкз\b", re.IGNORECASE)
+_ARTICLE_RE = re.compile(r"\b(статья|ст\.)\s*\d+", re.IGNORECASE)
+
+
 def _titles_match(claimed: str, real: str) -> bool:
     """
     Fuzzy match: check if the claimed title meaningfully overlaps with the real title.
-    Returns True if ≥35% of significant words in claimed title appear in real title,
-    or if either is a substring of the other (case-insensitive).
+    Returns True if:
+    - either is a substring of the other (case-insensitive), OR
+    - ≥35% of significant words in claimed title appear in real title, OR
+    - parent-document check: claimed title references an article of a law, and
+      real title is that same law (same code abbreviation or law number).
+      Example: "Статья 311 ГПК РФ..." vs "Гражданский процессуальный кодекс (ГПК РФ)..."
     """
     if not claimed or not real:
         return False
@@ -4700,6 +4720,19 @@ def _titles_match(claimed: str, real: str) -> bool:
     r = real.lower().strip()
     if c in r or r in c:
         return True
+
+    # Parent-document check: claimed title is an article of a law,
+    # real title is the parent document → treat as OK (URL points to parent)
+    if _ARTICLE_RE.search(c):
+        c_codes = set(m.group(0).lower() for m in _DOC_CODE_RE.finditer(c))
+        r_codes = set(m.group(0).lower() for m in _DOC_CODE_RE.finditer(r))
+        if c_codes and r_codes and (c_codes & r_codes):
+            return True  # same law code in both → parent-document match
+        c_laws = set(_LAW_NUM_RE.findall(c))
+        r_laws = set(_LAW_NUM_RE.findall(r))
+        if c_laws and r_laws and (c_laws & r_laws):
+            return True  # same law number in both → parent-document match
+
     stop = {"от", "об", "на", "по", "в", "к", "с", "и", "о", "или", "при", "для", "за",
             "не", "до", "из", "а", "the", "of", "and", "in", "to", "for"}
     c_words = [w for w in re.split(r"\W+", c) if len(w) > 2 and w not in stop]
@@ -6142,9 +6175,28 @@ def assemble_subtopic_final(
 
     untrusted_parts = collect_untrusted_output_parts(run_workspace, included_parts)
 
+    # ── TRUST GATE: check BEFORE creating files ──────────────────────────────
+    # Untrusted parts → use .UNTRUSTED. filename so canonical final.assembled.md
+    # never exists when content is unverified. Copying is still possible but
+    # requires a conscious choice to copy a file with .UNTRUSTED. in the name.
+    has_untrusted = bool(untrusted_parts)
+    if has_untrusted:
+        assembled_md = run_workspace.final_dir / "final.assembled.UNTRUSTED.md"
+        assembled_docx = run_workspace.final_dir / "final.assembled.UNTRUSTED.docx"
+        untrusted_labels = ", ".join(
+            f"Part {item['part_number']} ({item['source_origin']})" for item in untrusted_parts
+        )
+        print(
+            f"⚠  UNTRUSTED ASSEMBLY: {untrusted_labels}\n"
+            f"   Файлы созданы с суффиксом .UNTRUSTED. — канонические имена не доступны.\n"
+            f"   Используй capture-part-output для всех Частей чтобы получить final.assembled.md."
+        )
+    else:
+        assembled_md = run_workspace.final_dir / "final.assembled.md"
+        assembled_docx = run_workspace.final_dir / "final.assembled.docx"
+    # ─────────────────────────────────────────────────────────────────────────
+
     final_markdown = assemble_final_markdown_document(run_workspace, assembled_blocks)
-    assembled_md = run_workspace.final_dir / "final.assembled.md"
-    assembled_docx = run_workspace.final_dir / "final.assembled.docx"
     refresh_master_working_file(run_workspace)
     write_text(assembled_md, final_markdown)
     replace_docx_body_with_text(
@@ -6164,7 +6216,7 @@ def assemble_subtopic_final(
         "assembled_md": str(assembled_md),
         "assembled_docx": str(assembled_docx),
         "run_mode": "fresh-only",
-        "trusted_fresh_run": not bool(untrusted_parts),
+        "trusted_fresh_run": not has_untrusted,
         "untrusted_parts": untrusted_parts,
         "published": False,
     }
@@ -6175,12 +6227,14 @@ def assemble_subtopic_final(
             raise RuntimeError(
                 f"Cannot publish final output while parts are still missing/stub: {unresolved}"
             )
-        if untrusted_parts:
+        if has_untrusted:
             issues = ", ".join(
                 f"Part {item['part_number']} ({item['source_origin']})" for item in untrusted_parts
             )
             raise RuntimeError(
                 "Cannot publish this run as fresh-only: untrusted stage outputs detected: " + issues
+                + f"\nФайлы доступны как: {assembled_md.name} / {assembled_docx.name}"
+                + "\nЕсли публикация необходима — скопируй .UNTRUSTED. файлы вручную осознанно."
             )
         enforce_publish_metric_floor(
             final_markdown,
