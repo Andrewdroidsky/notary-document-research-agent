@@ -280,15 +280,22 @@ FOLLOWUP_SEARCH_MANDATE = """===================================================
 ================================================================"""
 
 WEBFETCH_MANDATE = """================================================================
-ОБЯЗАТЕЛЬНЫЙ МАНДАТ: WEB_FETCH ДО КАЖДОЙ КАРТОЧКИ
+ОБЯЗАТЕЛЬНЫЙ МАНДАТ: fetch-and-log + WEB_FETCH ДО КАЖДОЙ КАРТОЧКИ
 
 ЗАПРЕЩЕНО писать карточку документа без предшествующего реального web_fetch.
 
 Порядок работы для каждого поискового блока — строго:
 1. Написать запрос прямо в тексте ответа: >>> ПОИСК: "запрос"
-2. Выполнить web_search / web_fetch — получить реальный результат страницы
-3. Написать прямо в тексте ответа: Продолжаю верификацию через web_fetch.
-4. Только после этого — написать карточку на основе реального результата
+2. Выполнить web_search — найти URL документа
+3. Выполнить команду: python notary_agent.py fetch-and-log <subtopic_id> <url>
+   Команда сделает реальный HTTP-запрос и вернёт заголовок страницы.
+   Запись в research-log создаётся ТОЛЬКО через эту команду.
+4. Написать прямо в тексте ответа: Продолжаю верификацию через web_fetch.
+5. Только после этого — написать карточку, используя заголовок из команды.
+
+ЗАПРЕЩЕНО добавлять записи в research-log вручную (echo, Write tool).
+Только fetch-and-log создаёт доверенные записи (fetched_by_agent=true).
+Записи без fetched_by_agent=true блокируют захват.
 
 Эти маркеры должны присутствовать ВНУТРИ текста Части — не как отдельные
 сообщения в чат, а прямо в теле ответа между блоками карточек. Они попадают
@@ -5008,12 +5015,18 @@ def validate_url2_against_research_log(text: str, research_log_path: Path) -> li
             if not entry_urls:
                 continue
 
-            extra_fields = {
-                k for k, v in entry.items()
-                if k.lower() not in _TIMESTAMP_KEYS
-                and not (isinstance(v, str) and (v.startswith("http://") or v.startswith("https://")))
-            }
-            has_content = len(extra_fields) >= 2
+            # fetched_by_agent=True (set by fetch-and-log command) = trusted entry
+            # Legacy entries without the field: accept if they have ≥2 extra fields
+            if entry.get("fetched_by_agent") is True:
+                has_content = True
+            else:
+                extra_fields = {
+                    k for k, v in entry.items()
+                    if k.lower() not in _TIMESTAMP_KEYS
+                    and not (isinstance(v, str) and (v.startswith("http://") or v.startswith("https://")))
+                    and k != "fetched_by_agent"
+                }
+                has_content = len(extra_fields) >= 2
 
             for u in entry_urls:
                 if has_content:
@@ -5021,7 +5034,7 @@ def validate_url2_against_research_log(text: str, research_log_path: Path) -> li
                 else:
                     bare_urls.add(u)
 
-    url2_pattern = re.compile(r"`(https?://[^`]+)`")
+    url2_pattern = re.compile(r"^URL2:\s*`(https?://[^`]+)`", re.MULTILINE)
     found_url2 = set(url2_pattern.findall(text))
 
     def _matches(url: str, pool: set[str]) -> bool:
@@ -8202,6 +8215,99 @@ def cmd_batch_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_fetch_and_log(args: argparse.Namespace) -> int:
+    """Fetch URL, write research-log entry with fetched_by_agent=true, print page title.
+
+    This is the REQUIRED step before writing each card in Parts 2-9.
+    Entries created by this command have fetched_by_agent=true — the validator
+    treats them as verified. Manual echo/Write entries without this field
+    are treated as bare (blocked).
+    """
+    import urllib.request
+    import html.parser as _html_parser
+    import re as _re
+
+    subtopic_id = args.subtopic_id
+    url = args.url
+
+    workspace_root = Path(args.workspace_root).resolve()
+    run_workspace = ensure_subtopic_run_workspace(
+        workspace_root=workspace_root,
+        subtopic_id=subtopic_id,
+        theme_query=getattr(args, "theme_query", None) or "",
+        create_if_missing=False,
+    )
+
+    research_log_path = run_workspace.web_plan_dir / "research-log.jsonl"
+    if not research_log_path.exists():
+        print(f"ERROR: research-log.jsonl not found at {research_log_path}", file=sys.stderr)
+        print("Run prepare-part-02-web first.", file=sys.stderr)
+        return 1
+
+    print(f"[fetch-and-log] Fetching: {url[:100]}", flush=True)
+
+    http_status = 0
+    content = ""
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; notary-agent/1.0)"},
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = resp.read(300_000)
+            http_status = resp.status
+            try:
+                content = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                content = raw.decode("cp1251", errors="replace")
+    except Exception as exc:
+        print(f"[fetch-and-log] WARNING: fetch failed ({exc}). Logging as unreachable.", file=sys.stderr)
+
+    class _TitleParser(_html_parser.HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.title = ""
+            self._in = False
+        def handle_starttag(self, tag, attrs):
+            if tag == "title":
+                self._in = True
+        def handle_endtag(self, tag):
+            if tag == "title":
+                self._in = False
+        def handle_data(self, data):
+            if self._in:
+                self.title += data
+
+    tp = _TitleParser()
+    tp.feed(content[:60_000])
+    page_title = tp.title.strip() or "(title not found)"
+
+    text_only = _re.sub(r"<[^>]+>", " ", content[:15_000])
+    text_only = _re.sub(r"\s+", " ", text_only).strip()
+    content_preview = text_only[:600]
+
+    entry = {
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "fetched_by_agent": True,
+        "url": url,
+        "http_status": http_status,
+        "page_title": page_title,
+        "content_preview": content_preview,
+        "query": f"fetch-and-log:{url[:80]}",
+    }
+    with open(research_log_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    print(f"[fetch-and-log] HTTP {http_status}")
+    print(f"[fetch-and-log] Заголовок: {page_title}")
+    print(f"[fetch-and-log] Запись добавлена → {research_log_path.name}")
+    print()
+    print("Используй в карточке:")
+    print(f"  URL2: `{url}`")
+    print(f"  Заголовок страницы URL2: {page_title}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="md-first notary internship agent")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -8405,6 +8511,19 @@ def build_parser() -> argparse.ArgumentParser:
     batch_run_parser.add_argument("--dry-run", action="store_true")
     batch_run_parser.add_argument("--include-existing-notes", action="store_true")
     batch_run_parser.set_defaults(func=cmd_batch_run)
+
+    fetch_and_log = subparsers.add_parser(
+        "fetch-and-log",
+        help=(
+            "Fetch a URL, write result to research-log with fetched_by_agent=true, "
+            "print page title. REQUIRED before each card."
+        ),
+    )
+    fetch_and_log.add_argument("subtopic_id")
+    fetch_and_log.add_argument("url")
+    fetch_and_log.add_argument("--theme-query")
+    fetch_and_log.add_argument("--workspace-root", default=".")
+    fetch_and_log.set_defaults(func=cmd_fetch_and_log)
 
     return parser
 
