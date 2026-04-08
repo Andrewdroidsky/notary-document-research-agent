@@ -7846,14 +7846,24 @@ def cmd_metric_check(args: argparse.Namespace) -> int:
         raise RuntimeError("target must be one of: master, assembled, published")
 
     metrics = compute_text_metrics(text)
+    chars_ok = metrics["chars"] >= PUBLISH_MIN_CHARS
+    words_ok = metrics["words"] >= PUBLISH_MIN_WORDS
+    url2_ok = metrics["url2"] >= PUBLISH_MIN_URL2
+    volume_status = "OK — объём соответствует норме. Добор НЕ ТРЕБУЕТСЯ." if (chars_ok and words_ok) else f"НЕДОСТАТОЧНО — нужно минимум {PUBLISH_MIN_CHARS} знаков и {PUBLISH_MIN_WORDS} слов."
     payload = {
         "subtopic_id": run_workspace.subtopic_entry.item_id,
         "target": target,
         "source_path": str(source_path),
         "words": metrics["words"],
         "chars": metrics["chars"],
+        "chars_floor": PUBLISH_MIN_CHARS,
+        "chars_status": "OK" if chars_ok else f"НИЖЕ НОРМЫ (мин {PUBLISH_MIN_CHARS})",
+        "words_floor": PUBLISH_MIN_WORDS,
+        "words_status": "OK" if words_ok else f"НИЖЕ НОРМЫ (мин {PUBLISH_MIN_WORDS})",
+        "volume_verdict": volume_status,
         "url1": metrics["url1"],
         "url2": metrics["url2"],
+        "url2_status": "OK" if url2_ok else f"НИЖЕ НОРМЫ (мин {PUBLISH_MIN_URL2})",
         "verified_url2": metrics["verified_url2"],
         "document_cards": metrics["document_cards"],
         "page_count": page_count,
