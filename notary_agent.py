@@ -7031,9 +7031,27 @@ def strip_leading_part_heading(content: str, part_number: int) -> str:
     return "\n".join(remaining)
 
 
+_SERVICE_MARKER_RE = re.compile(
+    r"(?:"
+    r"^\s*>>>\s*ПОИСК[^\n]*\n?"
+    r"|^\s*Продолжаю верификацию через web_fetch[^\n]*\n?"
+    r"|^\s*\[WEBFETCH-(?:ПОДТВЕРЖДЕНИЕ|ДЕКЛАРАЦИЯ)\].*?(?=\n\s*\n|\Z)"
+    r")",
+    re.MULTILINE | re.IGNORECASE | re.DOTALL,
+)
+
+
+def strip_service_markers(content: str) -> str:
+    """Remove fetch-and-log protocol markers that must not appear in final output."""
+    cleaned = _SERVICE_MARKER_RE.sub("", content)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned
+
+
 def render_final_part_block(part_number: int, content: str) -> str:
     title = FINAL_PART_TITLES.get(part_number, f"ЧАСТЬ {part_number}")
-    normalized = normalize_final_part_content(strip_leading_part_heading(content, part_number))
+    cleaned = strip_service_markers(content)
+    normalized = normalize_final_part_content(strip_leading_part_heading(cleaned, part_number))
     return f"## ЧАСТЬ {part_number}. {title}\n\n{normalized}"
 
 
@@ -8422,6 +8440,8 @@ def cmd_promote_draft(args: argparse.Namespace) -> int:
         return 1
     args.source_file = str(draft_path)
     args.clipboard = False
+    if not hasattr(args, "auto_assemble"):
+        args.auto_assemble = True
     print(f"[promote-draft] Продвигаю {draft_path.name} → 02-stage-outputs/part-{part_number:02d}.md")
     return cmd_capture_part_output(args)
 
@@ -8655,6 +8675,8 @@ def build_parser() -> argparse.ArgumentParser:
     promote_draft.add_argument("part_number", type=int)
     promote_draft.add_argument("--theme-query")
     promote_draft.add_argument("--workspace-root", default=str(Path(__file__).parent))
+    promote_draft.add_argument("--no-auto-assemble", dest="auto_assemble", action="store_false")
+    promote_draft.set_defaults(auto_assemble=True)
     promote_draft.set_defaults(func=cmd_promote_draft)
 
     return parser
