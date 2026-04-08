@@ -8435,7 +8435,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Prepare a draft/review packet for one main theme outline without rendering order copies",
     )
     draft_main_theme_outline.add_argument("theme_query")
-    draft_main_theme_outline.add_argument("--workspace-root", default=".")
+    draft_main_theme_outline.add_argument("--workspace-root", default=str(Path(__file__).parent))
     draft_main_theme_outline.set_defaults(func=cmd_draft_main_theme_outline)
 
     prepare_main_theme = subparsers.add_parser(
@@ -8443,7 +8443,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Build a workflow-first packet for one main theme from Утверждаю",
     )
     prepare_main_theme.add_argument("theme_query")
-    prepare_main_theme.add_argument("--workspace-root", default=".")
+    prepare_main_theme.add_argument("--workspace-root", default=str(Path(__file__).parent))
     prepare_main_theme.add_argument("--packet-mode", choices=[PACKET_MODE_LEAN, PACKET_MODE_LITERAL], default=DEFAULT_PACKET_MODE)
     prepare_main_theme.add_argument("--packet-mode-reason", default="")
     prepare_main_theme.set_defaults(func=cmd_prepare_main_theme)
@@ -8454,7 +8454,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_subtopic.add_argument("subtopic_id")
     run_subtopic.add_argument("--theme-query")
-    run_subtopic.add_argument("--workspace-root", default=".")
+    run_subtopic.add_argument("--workspace-root", default=str(Path(__file__).parent))
     run_subtopic.add_argument("--full-artifacts", action="store_true")
     run_subtopic.add_argument("--packet-mode", choices=[PACKET_MODE_LEAN, PACKET_MODE_LITERAL], default=DEFAULT_PACKET_MODE)
     run_subtopic.add_argument("--packet-mode-reason", default="")
@@ -8468,7 +8468,7 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_surgical_redo.add_argument("--parts", required=True, help="Comma-separated allowed parts, for example 2,3")
     prepare_surgical_redo.add_argument("--reason", default="")
     prepare_surgical_redo.add_argument("--theme-query")
-    prepare_surgical_redo.add_argument("--workspace-root", default=".")
+    prepare_surgical_redo.add_argument("--workspace-root", default=str(Path(__file__).parent))
     prepare_surgical_redo.set_defaults(func=cmd_prepare_surgical_redo)
 
     execute_part_01 = subparsers.add_parser(
@@ -8477,7 +8477,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     execute_part_01.add_argument("subtopic_id")
     execute_part_01.add_argument("--theme-query")
-    execute_part_01.add_argument("--workspace-root", default=".")
+    execute_part_01.add_argument("--workspace-root", default=str(Path(__file__).parent))
     execute_part_01.add_argument("--force", action="store_true")
     execute_part_01.set_defaults(func=cmd_execute_part_01)
 
@@ -8487,7 +8487,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     assemble_subtopic_final_parser.add_argument("subtopic_id")
     assemble_subtopic_final_parser.add_argument("--theme-query")
-    assemble_subtopic_final_parser.add_argument("--workspace-root", default=".")
+    assemble_subtopic_final_parser.add_argument("--workspace-root", default=str(Path(__file__).parent))
     assemble_subtopic_final_parser.add_argument("--publish", action="store_true")
     assemble_subtopic_final_parser.add_argument(
         "--force",
@@ -8502,7 +8502,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     metric_check.add_argument("subtopic_id")
     metric_check.add_argument("--theme-query")
-    metric_check.add_argument("--workspace-root", default=".")
+    metric_check.add_argument("--workspace-root", default=str(Path(__file__).parent))
     metric_check.add_argument("--target", choices=["master", "assembled", "published"], default="master")
     metric_check.set_defaults(func=cmd_metric_check)
 
@@ -8513,7 +8513,7 @@ def build_parser() -> argparse.ArgumentParser:
     capture_part_output.add_argument("subtopic_id")
     capture_part_output.add_argument("part_number", type=int)
     capture_part_output.add_argument("--theme-query")
-    capture_part_output.add_argument("--workspace-root", default=".")
+    capture_part_output.add_argument("--workspace-root", default=str(Path(__file__).parent))
     capture_part_output.add_argument("--source-file")
     capture_part_output.add_argument("--clipboard", action="store_true")
     capture_part_output.add_argument("--no-auto-assemble", dest="auto_assemble", action="store_false")
@@ -8526,7 +8526,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     prepare_part_02_web.add_argument("subtopic_id")
     prepare_part_02_web.add_argument("--theme-query")
-    prepare_part_02_web.add_argument("--workspace-root", default=".")
+    prepare_part_02_web.add_argument("--workspace-root", default=str(Path(__file__).parent))
     prepare_part_02_web.add_argument("--force", action="store_true")
     prepare_part_02_web.set_defaults(func=cmd_prepare_part_02_web)
 
@@ -8536,7 +8536,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     prepare_part_03_plan.add_argument("subtopic_id")
     prepare_part_03_plan.add_argument("--theme-query")
-    prepare_part_03_plan.add_argument("--workspace-root", default=".")
+    prepare_part_03_plan.add_argument("--workspace-root", default=str(Path(__file__).parent))
     prepare_part_03_plan.add_argument("--force", action="store_true")
     prepare_part_03_plan.set_defaults(func=cmd_prepare_part_03_plan)
 
@@ -8547,7 +8547,7 @@ def build_parser() -> argparse.ArgumentParser:
     capture_part_03_range.add_argument("subtopic_id")
     capture_part_03_range.add_argument("segment_id", type=int)
     capture_part_03_range.add_argument("--theme-query")
-    capture_part_03_range.add_argument("--workspace-root", default=".")
+    capture_part_03_range.add_argument("--workspace-root", default=str(Path(__file__).parent))
     capture_part_03_range.add_argument("--source-file")
     capture_part_03_range.add_argument("--clipboard", action="store_true")
     capture_part_03_range.add_argument("--no-auto-assemble", dest="auto_assemble", action="store_false")
@@ -8560,7 +8560,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     prepare_part_04_plan.add_argument("subtopic_id")
     prepare_part_04_plan.add_argument("--theme-query")
-    prepare_part_04_plan.add_argument("--workspace-root", default=".")
+    prepare_part_04_plan.add_argument("--workspace-root", default=str(Path(__file__).parent))
     prepare_part_04_plan.add_argument("--force", action="store_true")
     prepare_part_04_plan.set_defaults(func=cmd_prepare_part_04_plan)
 
@@ -8571,7 +8571,7 @@ def build_parser() -> argparse.ArgumentParser:
     capture_part_04_range.add_argument("subtopic_id")
     capture_part_04_range.add_argument("segment_id", type=int)
     capture_part_04_range.add_argument("--theme-query")
-    capture_part_04_range.add_argument("--workspace-root", default=".")
+    capture_part_04_range.add_argument("--workspace-root", default=str(Path(__file__).parent))
     capture_part_04_range.add_argument("--source-file")
     capture_part_04_range.add_argument("--clipboard", action="store_true")
     capture_part_04_range.add_argument("--no-auto-assemble", dest="auto_assemble", action="store_false")
@@ -8584,7 +8584,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     prepare_part_05_plan.add_argument("subtopic_id")
     prepare_part_05_plan.add_argument("--theme-query")
-    prepare_part_05_plan.add_argument("--workspace-root", default=".")
+    prepare_part_05_plan.add_argument("--workspace-root", default=str(Path(__file__).parent))
     prepare_part_05_plan.add_argument("--force", action="store_true")
     prepare_part_05_plan.set_defaults(func=cmd_prepare_part_05_plan)
 
@@ -8595,7 +8595,7 @@ def build_parser() -> argparse.ArgumentParser:
     capture_part_05_range.add_argument("subtopic_id")
     capture_part_05_range.add_argument("segment_id", type=int)
     capture_part_05_range.add_argument("--theme-query")
-    capture_part_05_range.add_argument("--workspace-root", default=".")
+    capture_part_05_range.add_argument("--workspace-root", default=str(Path(__file__).parent))
     capture_part_05_range.add_argument("--source-file")
     capture_part_05_range.add_argument("--clipboard", action="store_true")
     capture_part_05_range.add_argument("--no-auto-assemble", dest="auto_assemble", action="store_false")
@@ -8640,7 +8640,7 @@ def build_parser() -> argparse.ArgumentParser:
     fetch_and_log.add_argument("subtopic_id")
     fetch_and_log.add_argument("url")
     fetch_and_log.add_argument("--theme-query")
-    fetch_and_log.add_argument("--workspace-root", default=".")
+    fetch_and_log.add_argument("--workspace-root", default=str(Path(__file__).parent))
     fetch_and_log.set_defaults(func=cmd_fetch_and_log)
 
     promote_draft = subparsers.add_parser(
@@ -8654,7 +8654,7 @@ def build_parser() -> argparse.ArgumentParser:
     promote_draft.add_argument("subtopic_id")
     promote_draft.add_argument("part_number", type=int)
     promote_draft.add_argument("--theme-query")
-    promote_draft.add_argument("--workspace-root", default=".")
+    promote_draft.add_argument("--workspace-root", default=str(Path(__file__).parent))
     promote_draft.set_defaults(func=cmd_promote_draft)
 
     return parser
