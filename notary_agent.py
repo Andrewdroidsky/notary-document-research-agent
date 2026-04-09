@@ -7987,6 +7987,31 @@ def cmd_capture_part_output(args: argparse.Namespace) -> int:
     return 0
 
 
+def _auto_init_part_drafts(run_workspace: "SubtopicRunWorkspace") -> None:
+    """Pre-seed draft-part-NN.md files for Parts 2–9 with [WEBFETCH-ДЕКЛАРАЦИЯ].
+
+    Called automatically by prepare-part-02-web so the files exist with the
+    mandatory opening marker before the agent writes any cards. This removes
+    reliance on the agent remembering to call init-part-draft manually.
+    """
+    declaration = (
+        "[WEBFETCH-ДЕКЛАРАЦИЯ] Начинаю поиск документов по теме. Все URL2 получаю через\n"
+        "web_fetch с реальных страниц. Ни одна ссылка не будет сконструирована из памяти модели.\n\n"
+    )
+    for part_number in range(2, 10):
+        draft_path = run_workspace.web_plan_dir / f"draft-part-{part_number:02d}.md"
+        if draft_path.exists():
+            content = draft_path.read_text(encoding="utf-8")
+            if "[WEBFETCH-ДЕКЛАРАЦИЯ]" in content:
+                continue  # already initialized
+            # File exists without marker — prepend it
+            draft_path.write_text(declaration + content, encoding="utf-8")
+            print(f"[auto-init-drafts] Prepended [WEBFETCH-ДЕКЛАРАЦИЯ] to existing {draft_path.name}")
+        else:
+            draft_path.write_text(declaration, encoding="utf-8")
+            print(f"[auto-init-drafts] Created {draft_path.name} with [WEBFETCH-ДЕКЛАРАЦИЯ]")
+
+
 def cmd_prepare_part_02_web(args: argparse.Namespace) -> int:
     workspace_root = Path(args.workspace_root).resolve()
     run_workspace = ensure_subtopic_run_workspace(
@@ -7995,6 +8020,7 @@ def cmd_prepare_part_02_web(args: argparse.Namespace) -> int:
         theme_query=args.theme_query,
     )
     assert_run_command_allowed(run_workspace, "prepare-part-02-web", part_number=2)
+    _auto_init_part_drafts(run_workspace)
     plan_paths = write_part_02_web_plan(run_workspace, overwrite=args.force)
     reasoning_paths = None if run_workspace.is_surgical_redo else write_reasoning_layer(run_workspace, overwrite=args.force)
     if not run_workspace.is_surgical_redo:
