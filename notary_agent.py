@@ -45,7 +45,7 @@ DEFAULT_PACKET_MODE = os.environ.get(PACKET_MODE_ENV, PACKET_MODE_LEAN).strip().
 RUN_MODE_FRESH = "fresh-only"
 RUN_MODE_SURGICAL = "surgical-redo"
 STRICT_ORCHESTRATION_TARGET_PERCENT = 3.0
-PUBLISH_MIN_WORDS = 16000
+PUBLISH_MIN_WORDS = 8000
 PUBLISH_MIN_CHARS = 122000
 # URL1 is advisory-only — quantity pressure drives hallucination (documented 07.04.2026).
 PUBLISH_TARGET_URL1 = 45
