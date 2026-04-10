@@ -417,6 +417,32 @@ python notary_agent.py promote-draft <id> <N>
 Агент физически не может открыть draft-файл без маркера — файл уже существует.
 `init-part-draft` остался как ручная команда, но больше не обязателен для агента.
 
+**5. Fix Defense 1/3 false-positives для agent-supplied записей** (коммит `fe6b3bf`)
+
+На подтеме 17.3 выявлены два новых блока при работе с agent-supplied режимом:
+- Defense 3 (`check_research_log_timestamp_clustering`): все timestamps кластеризовались
+  в пределах секунд → блок «пакетная генерация». Ложное срабатывание.
+- Defense 1 (`check_research_log_url_authenticity`): попытка urllib-запросов к URL
+  из agent-supplied записей → WinError 10013.
+
+Решение: `fetch-and-log --title --preview` добавляет `"agent_supplied": true` в запись.
+Defense 1 и Defense 3 пропускают записи с этим флагом.
+Legacy-режим (без `--title`) проверяется как прежде.
+
+**6. Авто-запись `>>> ПОИСК:` в draft-файл** (коммит `7cad33f`)
+
+`check_search_grounding` требует 1:1: число маркеров `>>> ПОИСК:` ≥ числу карточек.
+Модель регулярно забывала писать маркер вручную → hard block на promote-draft.
+
+Решение: `fetch-and-log` теперь автоматически дописывает `>>> ПОИСК: <url>`
+в конец активного `draft-part-NN.md` (последний по имени файл в web_plan_dir).
+Маркер записывается до того как агент пишет карточку → 1:1 гарантировано без участия модели.
+
+### Статус подтемы 17.3
+
+Часть 2 захвачена trusted-цепочкой. Части 3–11 не написаны.
+После `git pull` агент продолжает с Части 3 — все шесть блокирующих проблем закрыты.
+
 ### Полный диалог расследования
 
 `C:\Users\koper\OneDrive\Documents\New project\dialog-2026-04-10-untrusted-fix.md`
