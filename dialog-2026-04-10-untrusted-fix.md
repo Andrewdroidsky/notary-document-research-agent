@@ -144,14 +144,39 @@ Legacy-режим (без `--title`) сохранён как fallback.
 
 ---
 
+## Дополнение — Автоматическая инициализация draft-файлов (коммит 9c03f8f)
+
+### Проблема
+
+После внедрения `init-part-draft` агент по-прежнему пропускал ручной вызов команды
+и начинал писать Часть 2 по-старому — без маркера. Инструкция в тексте файла
+не является принудительным исполнением: модель может прочитать правило и проигнорировать его.
+
+### Решение
+
+Добавлена функция `_auto_init_part_drafts(run_workspace)`:
+- Вызывается автоматически внутри `cmd_prepare_part_02_web`
+- Создаёт `draft-part-02.md` … `draft-part-09.md` с `[WEBFETCH-ДЕКЛАРАЦИЯ]` в первой строке
+- Если файл уже существует с маркером — пропускает
+- Если файл уже существует без маркера — дописывает маркер в начало
+
+Теперь к моменту когда агент открывает draft-файл он уже содержит `[WEBFETCH-ДЕКЛАРАЦИЯ]`.
+Агент физически не может создать файл заново без маркера — файл уже существует.
+
+`init-part-draft` остался как явная ручная команда, но больше не является обязательным шагом агента.
+
+---
+
 ## Коммиты
 
 ```
 734ea74  Fix UNTRUSTED capture-chain: init-part-draft + fetch-and-log agent-supplied mode
 493fa61  Добавить fetch-protocol.md и прописать его в AGENTS.md
+ab44a63  Зафиксировать расследование UNTRUSTED 10.04.2026 в PROJECT_STATE и диалоге
+9c03f8f  Auto-init draft files in prepare-part-02-web: remove manual init-part-draft dependency
 ```
 
-Оба коммита запушены в `https://github.com/Andrewdroidsky/notary-document-research-agent.git`.
+Все три коммита запушены в `https://github.com/Andrewdroidsky/notary-document-research-agent.git`.
 
 ---
 
