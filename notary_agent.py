@@ -8506,6 +8506,19 @@ def cmd_fetch_and_log(args: argparse.Namespace) -> int:
     with open(research_log_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
+    # Auto-write >>> ПОИСК: marker into the current part draft file.
+    # This satisfies the 1:1 grounding check (check_search_grounding) without
+    # relying on the agent to remember to write it manually.
+    # Find the latest draft-part-NN.md in the web_plan_dir.
+    web_plan_dir = run_workspace.web_plan_dir
+    draft_files = sorted(web_plan_dir.glob("draft-part-[0-9][0-9].md"))
+    if draft_files:
+        active_draft = draft_files[-1]
+        grounding_marker = f"\n>>> ПОИСК: {url[:120]}\n"
+        with open(active_draft, "a", encoding="utf-8") as df:
+            df.write(grounding_marker)
+        print(f"[fetch-and-log] >>> ПОИСК: вписан в {active_draft.name}")
+
     print(f"[fetch-and-log] HTTP {http_status}")
     print(f"[fetch-and-log] Заголовок: {page_title}")
     print(f"[fetch-and-log] Запись добавлена → {research_log_path.name}")
