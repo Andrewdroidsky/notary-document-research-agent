@@ -7218,6 +7218,7 @@ def build_master_working_markdown(run_workspace: SubtopicRunWorkspace) -> str:
             if not is_response_stub(content):
                 if part.number == 3:
                     content = sanitize_substantive_part_output(run_workspace, part.number, content).strip()
+                content = strip_service_markers(content)
                 content = strip_leading_part_heading(content, part.number)
                 lines.append(normalize_final_part_content(content) if content else "[Пока не заполнено]")
             else:
