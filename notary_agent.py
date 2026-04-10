@@ -663,6 +663,98 @@ def write_json(path: Path, payload: Any) -> None:
     write_text(path, json.dumps(payload, ensure_ascii=False, indent=2))
 
 
+def read_json_safe(path: Path) -> Any:
+    """Read a JSON file, auto-repairing common corruption (appended duplicate content).
+
+    manifest.json sometimes gets a duplicate trailing JSON block appended by the agent
+    via direct bash/Write tool instead of write_json. This function recovers the first
+    valid JSON object and silently drops the trailing garbage, then rewrites the file.
+    """
+    raw = read_text(path)
+    raw = raw.strip()
+    if not raw:
+        raise ValueError(f"Empty JSON file: {path}")
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # Try to extract the first valid JSON object by finding balanced braces.
+        depth = 0
+        in_string = False
+        escape = False
+        end_pos = -1
+        for i, ch in enumerate(raw):
+            if escape:
+                escape = False
+                continue
+            if ch == "\\" and in_string:
+                escape = True
+                continue
+            if ch == '"' and not escape:
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end_pos = i
+                    break
+        if end_pos > 0:
+            candidate = raw[: end_pos + 1]
+            try:
+                result = json.loads(candidate)
+                print(f"[read_json_safe] Repaired corrupted {path.name} — truncated trailing garbage", file=sys.stderr)
+                write_json(path, result)
+                return result
+            except json.JSONDecodeError:
+                pass
+        raise ValueError(f"Cannot repair JSON in {path}")
+
+
+def repair_research_log(log_path: Path) -> int:
+    """Repair research-log.jsonl by removing or splitting malformed lines.
+
+    Returns the number of lines repaired.
+    """
+    if not log_path.exists():
+        return 0
+    raw_lines = log_path.read_text(encoding="utf-8").splitlines()
+    good_lines: list[str] = []
+    repaired = 0
+    for line in raw_lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            json.loads(line)
+            good_lines.append(line)
+        except json.JSONDecodeError:
+            # Try splitting on }{  — two objects concatenated on one line.
+            fixed = re.sub(r"\}\s*\{", "}\n{", line)
+            parts = fixed.splitlines()
+            recovered = 0
+            for part in parts:
+                part = part.strip()
+                if not part:
+                    continue
+                try:
+                    json.loads(part)
+                    good_lines.append(part)
+                    recovered += 1
+                except json.JSONDecodeError:
+                    pass  # Drop unrecoverable fragment
+            if recovered:
+                repaired += 1
+            else:
+                repaired += 1  # Line dropped entirely
+    if repaired:
+        log_path.write_text("\n".join(good_lines) + "\n", encoding="utf-8")
+        print(f"[repair_research_log] Repaired {repaired} malformed lines in {log_path.name}", file=sys.stderr)
+    return repaired
+
+
 def read_text(path: Path) -> str:
     encodings = ["utf-8-sig", "utf-8", "cp1251", "utf-16", "latin-1"]
     for encoding in encodings:
@@ -3341,6 +3433,26 @@ def build_followup_part_packet(run_workspace: SubtopicRunWorkspace, part_number:
             5,
             "- Для Части 10 после каждого пункта давать копируемые ссылочные code-блоки с полным наименованием документа и структурным элементом.",
         )
+    elif part_number in {6, 7, 8, 9}:
+        lines.insert(
+            5,
+            "- Все найденные документы оформлять карточками с `Вид документа`, `Полное наименование`, `Структурный элемент`, `URL1`, `URL2`, `VERIFIED URL2`, `Заголовок страницы URL2`, `Сверка реквизитов` и `Каноническая строка поиска` по мере применимости.",
+        )
+        lines.insert(
+            6,
+            (
+                "⚠ ОБЯЗАТЕЛЬНОЕ ТРЕБОВАНИЕ ВАЛИДАТОРА — ПОЛЯ КАРТОЧКИ ДЛЯ ЧАСТЕЙ 6–9:\n"
+                "Каждая карточка обязана содержать ВСЕ следующие поля (иначе promote-draft заблокирует):\n"
+                "  Вид документа: ...\n"
+                "  Полное наименование: ...\n"
+                "  Структурный элемент: ...\n"
+                "  URL1: ...\n"
+                "  URL2: ...\n"
+                "  Статус верификации: ...\n"
+                "Поле `Статус верификации:` обязательно — пустое или отсутствующее = hard block.\n"
+                "Запрещено использовать строки `Прямой документ:` / `Прямые документы:` — только полные карточки."
+            ),
+        )
     else:
         lines.insert(
             5,
@@ -3567,7 +3679,7 @@ def update_run_manifest_web_plan(run_workspace: SubtopicRunWorkspace, plan_paths
     manifest_path = run_workspace.run_dir / "manifest.json"
     if not manifest_path.exists():
         return
-    manifest = json.loads(read_text(manifest_path))
+    manifest = read_json_safe(manifest_path)
     manifest["part_02_web_plan"] = {
         "generated_at": utc_now_iso(),
         "web_plan_dir": str(plan_paths["web_plan_dir"]),
@@ -3593,7 +3705,7 @@ def update_run_manifest_reasoning_layer(run_workspace: SubtopicRunWorkspace, rea
     manifest_path = run_workspace.run_dir / "manifest.json"
     if not manifest_path.exists():
         return
-    manifest = json.loads(read_text(manifest_path))
+    manifest = read_json_safe(manifest_path)
     manifest["reasoning_layer"] = {
         "generated_at": utc_now_iso(),
         "reasoning_dir": str(reasoning_paths["reasoning_dir"]),
@@ -3610,7 +3722,7 @@ def update_run_manifest_omission_audit(run_workspace: SubtopicRunWorkspace, omis
     manifest_path = run_workspace.run_dir / "manifest.json"
     if not manifest_path.exists():
         return
-    manifest = json.loads(read_text(manifest_path))
+    manifest = read_json_safe(manifest_path)
     manifest["omission_audit"] = {
         "generated_at": utc_now_iso(),
         "audit_dir": str(omission_paths["audit_dir"]),
@@ -3628,7 +3740,7 @@ def update_run_manifest_semantic_dedup(run_workspace: SubtopicRunWorkspace, dedu
     manifest_path = run_workspace.run_dir / "manifest.json"
     if not manifest_path.exists():
         return
-    manifest = json.loads(read_text(manifest_path))
+    manifest = read_json_safe(manifest_path)
     manifest["semantic_dedup"] = {
         "generated_at": utc_now_iso(),
         "dedup_dir": str(dedup_paths["dedup_dir"]),
@@ -3646,7 +3758,7 @@ def drop_disabled_manifest_layers(run_workspace: SubtopicRunWorkspace) -> None:
     manifest_path = run_workspace.run_dir / "manifest.json"
     if not manifest_path.exists():
         return
-    manifest = json.loads(read_text(manifest_path))
+    manifest = read_json_safe(manifest_path)
     changed = False
     if not PRODUCTION_ENABLE_SEMANTIC_DEDUP and "semantic_dedup" in manifest:
         manifest.pop("semantic_dedup", None)
@@ -3918,7 +4030,7 @@ def update_run_manifest_part_03_plan(run_workspace: SubtopicRunWorkspace, plan_p
     manifest_path = run_workspace.run_dir / "manifest.json"
     if not manifest_path.exists():
         return
-    manifest = json.loads(read_text(manifest_path))
+    manifest = read_json_safe(manifest_path)
     manifest["part_03_plan"] = {
         "generated_at": utc_now_iso(),
         "plan_dir": str(plan_paths["plan_dir"]),
@@ -5751,7 +5863,7 @@ def update_run_manifest_part_04_plan(run_workspace: SubtopicRunWorkspace, plan_p
     manifest_path = run_workspace.run_dir / "manifest.json"
     if not manifest_path.exists():
         return
-    manifest = json.loads(read_text(manifest_path))
+    manifest = read_json_safe(manifest_path)
     manifest["part_04_plan"] = {
         "generated_at": utc_now_iso(),
         "plan_dir": str(plan_paths["plan_dir"]),
@@ -5970,7 +6082,7 @@ def update_run_manifest_part_05_plan(run_workspace: SubtopicRunWorkspace, plan_p
     manifest_path = run_workspace.run_dir / "manifest.json"
     if not manifest_path.exists():
         return
-    manifest = json.loads(read_text(manifest_path))
+    manifest = read_json_safe(manifest_path)
     manifest["part_05_plan"] = {
         "generated_at": utc_now_iso(),
         "plan_dir": str(plan_paths["plan_dir"]),
@@ -5995,7 +6107,7 @@ def update_run_manifest_part_status(
     manifest_path = run_workspace.run_dir / "manifest.json"
     if not manifest_path.exists():
         return
-    manifest = json.loads(read_text(manifest_path))
+    manifest = read_json_safe(manifest_path)
     for part in manifest.get("parts", []):
         if int(part.get("part_number", 0)) == part_number:
             part["status"] = status
@@ -6498,7 +6610,7 @@ def write_subtopic_run_files(run_workspace: SubtopicRunWorkspace) -> None:
         },
     )
     manifest_path = run_workspace.run_dir / "manifest.json"
-    manifest = json.loads(read_text(manifest_path))
+    manifest = read_json_safe(manifest_path)
     if not run_workspace.lean_artifacts:
         manifest["final_contract_file"] = str(run_workspace.final_dir / "final.contract.json")
         manifest["final_skeleton_md"] = str(run_workspace.final_dir / "final.skeleton.md")
@@ -6554,7 +6666,7 @@ def write_subtopic_run_files(run_workspace: SubtopicRunWorkspace) -> None:
         write_json(manifest_path, manifest)
     if semantic_dedup_paths is not None:
         manifest_path = run_workspace.run_dir / "manifest.json"
-        manifest = json.loads(read_text(manifest_path))
+        manifest = read_json_safe(manifest_path)
         manifest["semantic_dedup"] = {
             "dedup_dir": str(semantic_dedup_paths["dedup_dir"]),
             "readme": str(semantic_dedup_paths["readme"]),
@@ -6567,7 +6679,7 @@ def write_subtopic_run_files(run_workspace: SubtopicRunWorkspace) -> None:
         write_json(manifest_path, manifest)
     if omission_audit_paths is not None:
         manifest_path = run_workspace.run_dir / "manifest.json"
-        manifest = json.loads(read_text(manifest_path))
+        manifest = read_json_safe(manifest_path)
         manifest["omission_audit"] = {
             "audit_dir": str(omission_audit_paths["audit_dir"]),
             "readme": str(omission_audit_paths["readme"]),
@@ -8097,6 +8209,7 @@ def cmd_capture_part_03_range(args: argparse.Namespace) -> int:
     )
     assert_run_command_allowed(run_workspace, "capture-part-03-range", part_number=3)
     research_log_path = run_workspace.web_plan_dir / "research-log.jsonl"
+    repair_research_log(research_log_path)
     d2_issues = check_tmp_generator_scripts(workspace_root)
     if d2_issues:
         raise RuntimeError("\n".join(d2_issues))
@@ -8182,6 +8295,7 @@ def cmd_capture_part_04_range(args: argparse.Namespace) -> int:
     )
     assert_run_command_allowed(run_workspace, "capture-part-04-range", part_number=4)
     research_log_path = run_workspace.web_plan_dir / "research-log.jsonl"
+    repair_research_log(research_log_path)
     d2_issues = check_tmp_generator_scripts(workspace_root)
     if d2_issues:
         raise RuntimeError("\n".join(d2_issues))
@@ -8266,6 +8380,7 @@ def cmd_capture_part_05_range(args: argparse.Namespace) -> int:
     )
     assert_run_command_allowed(run_workspace, "capture-part-05-range", part_number=5)
     research_log_path = run_workspace.web_plan_dir / "research-log.jsonl"
+    repair_research_log(research_log_path)
     d2_issues = check_tmp_generator_scripts(workspace_root)
     if d2_issues:
         raise RuntimeError("\n".join(d2_issues))
