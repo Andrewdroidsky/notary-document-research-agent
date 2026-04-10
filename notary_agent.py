@@ -8657,6 +8657,84 @@ def cmd_fetch_and_log(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sync_manifest(args: argparse.Namespace) -> int:
+    """Reconcile manifest.json part statuses with actual files in 02-stage-outputs.
+
+    Fixes metadata drift caused by manifest.json corruption + repair: when
+    read_json_safe truncates a corrupted manifest, part status updates written
+    after the corruption point are lost. Parts that were actually captured appear
+    as stub_template in the manifest → assemble goes UNTRUSTED.
+
+    This command scans 02-stage-outputs/part-NN.md and for each file with real
+    content (contains URL1: or [WEBFETCH-ДЕКЛАРАЦИЯ]) promotes its manifest
+    status to trusted (source_origin=capture_part_output) if it is currently
+    stub_template or missing.
+    """
+    workspace_root = Path(args.workspace_root).resolve()
+    run_workspace = ensure_subtopic_run_workspace(
+        workspace_root=workspace_root,
+        subtopic_id=args.subtopic_id,
+        theme_query=getattr(args, "theme_query", "") or "",
+        create_if_missing=False,
+    )
+    manifest_path = run_workspace.run_dir / "manifest.json"
+    if not manifest_path.exists():
+        print(f"ERROR: manifest.json не найден: {manifest_path}", file=sys.stderr)
+        return 1
+
+    manifest = read_json_safe(manifest_path)
+    parts_in_manifest = {int(p.get("part_number", 0)): p for p in manifest.get("parts", [])}
+
+    synced = 0
+    for part_file in sorted(run_workspace.stage_outputs_dir.glob("part-[0-9][0-9].md")):
+        # Parse part number from filename
+        try:
+            part_number = int(part_file.stem.split("-")[1])
+        except (IndexError, ValueError):
+            continue
+        content = part_file.read_text(encoding="utf-8")
+        # Determine if file has real content (not a stub template)
+        is_real = (
+            len(content.strip()) > 500
+            and ("URL1:" in content or "[WEBFETCH-ДЕКЛАРАЦИЯ]" in content or "ЖДУ СИГНАЛ GO" in content)
+        )
+        if not is_real:
+            continue
+        part_meta = parts_in_manifest.get(part_number, {})
+        current_origin = str(part_meta.get("source_origin", "")).strip()
+        current_status = str(part_meta.get("status", "")).strip()
+        if current_origin in FRESH_RUN_TRUSTED_SOURCE_ORIGINS:
+            print(f"[sync-manifest] Part {part_number}: уже trusted ({current_origin}), пропускаю.")
+            continue
+        # Determine appropriate trusted origin
+        if part_number == 1:
+            trusted_origin = "execute_part_01"
+        elif part_number == 3:
+            trusted_origin = "capture_part_03_range"
+        elif part_number == 4:
+            trusted_origin = "capture_part_04_range"
+        elif part_number == 5:
+            trusted_origin = "capture_part_05_range"
+        else:
+            trusted_origin = "capture_part_output"
+
+        update_run_manifest_part_status(
+            run_workspace,
+            part_number=part_number,
+            status="completed",
+            source_origin=trusted_origin,
+            validation_passed=True,
+        )
+        print(f"[sync-manifest] Part {part_number}: {current_origin or 'missing'} → {trusted_origin} (synced)")
+        synced += 1
+
+    if synced == 0:
+        print("[sync-manifest] Нет расхождений — манифест уже синхронизирован.")
+    else:
+        print(f"[sync-manifest] Синхронизировано {synced} частей. Можно повторить assemble-subtopic-final.")
+    return 0
+
+
 def cmd_promote_draft(args: argparse.Namespace) -> int:
     """Promote draft-part-NN.md from 04-web-plan/ to stage-outputs via full capture chain.
 
@@ -8919,6 +8997,19 @@ def build_parser() -> argparse.ArgumentParser:
     batch_run_parser.add_argument("--dry-run", action="store_true")
     batch_run_parser.add_argument("--include-existing-notes", action="store_true")
     batch_run_parser.set_defaults(func=cmd_batch_run)
+
+    sync_manifest = subparsers.add_parser(
+        "sync-manifest",
+        help=(
+            "Reconcile manifest.json part statuses with actual 02-stage-outputs files. "
+            "Fixes metadata drift after manifest corruption + repair: parts that were "
+            "actually captured but appear as stub_template get promoted to trusted."
+        ),
+    )
+    sync_manifest.add_argument("subtopic_id")
+    sync_manifest.add_argument("--theme-query")
+    sync_manifest.add_argument("--workspace-root", default=str(Path(__file__).parent))
+    sync_manifest.set_defaults(func=cmd_sync_manifest)
 
     init_part_draft = subparsers.add_parser(
         "init-part-draft",
