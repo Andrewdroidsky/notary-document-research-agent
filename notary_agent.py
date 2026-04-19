@@ -7970,6 +7970,12 @@ def cmd_assemble_subtopic_final(args: argparse.Namespace) -> int:
         theme_query=args.theme_query,
     )
     assert_run_command_allowed(run_workspace, "assemble-subtopic-final")
+    if not args.publish and not getattr(args, "allow_unpublished_assemble", False):
+        raise RuntimeError(
+            "assemble-subtopic-final without --publish is blocked to prevent accidental non-published finals. "
+            "Use --publish for the canonical final output in 04-output, or pass --allow-unpublished-assemble "
+            "only when you intentionally need a local preview in 03-final."
+        )
     if args.publish:
         assembled_md = assemble_subtopic_final(run_workspace, publish=False, force=bool(args.force))
         assembled_text = read_text(assembled_md)
@@ -8932,6 +8938,11 @@ def build_parser() -> argparse.ArgumentParser:
     assemble_subtopic_final_parser.add_argument("--theme-query")
     assemble_subtopic_final_parser.add_argument("--workspace-root", default=str(Path(__file__).parent))
     assemble_subtopic_final_parser.add_argument("--publish", action="store_true")
+    assemble_subtopic_final_parser.add_argument(
+        "--allow-unpublished-assemble",
+        action="store_true",
+        help="Explicitly allow preview-only assembly into 03-final without publishing to 04-output",
+    )
     assemble_subtopic_final_parser.add_argument(
         "--force",
         action="store_true",
