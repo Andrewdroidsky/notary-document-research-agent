@@ -8718,9 +8718,15 @@ def cmd_fetch_and_log(args: argparse.Namespace) -> int:
     # Auto-write >>> ПОИСК: marker into the current part draft file.
     # This satisfies the 1:1 grounding check (check_search_grounding) without
     # relying on the agent to remember to write it manually.
-    # Find the latest draft-part-NN.md in the web_plan_dir.
+    # Find the active draft-part-NN.md in the web_plan_dir.
+    # Lexicographic sort picks draft-part-09.md whenever all placeholders exist,
+    # which is misleading for the operator and appends grounding markers to the
+    # wrong draft. Use the most recently modified draft instead.
     web_plan_dir = run_workspace.web_plan_dir
-    draft_files = sorted(web_plan_dir.glob("draft-part-[0-9][0-9].md"))
+    draft_files = sorted(
+        web_plan_dir.glob("draft-part-[0-9][0-9].md"),
+        key=lambda p: p.stat().st_mtime,
+    )
     if draft_files:
         active_draft = draft_files[-1]
         grounding_marker = f"\n>>> ПОИСК: {url[:120]}\n"
