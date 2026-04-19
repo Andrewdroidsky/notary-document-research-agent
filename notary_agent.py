@@ -401,8 +401,38 @@ PART_02_SOURCE_CASCADE = [
     {
         "rank": 3,
         "role": "Readable URL2 candidates",
-        "domains": ["consultant.ru", "garant.ru", "docs.cntd.ru"],
-        "usage": "Читаемые источники для VERIFIED URL2 после сверки реквизитов и заголовка страницы.",
+        "domains": ["consultant.ru"],
+        "usage": "Первый читаемый слой URL2 после официальных источников.",
+    },
+    {
+        "rank": 4,
+        "role": "Readable URL2 candidates",
+        "domains": ["base.garant.ru"],
+        "usage": "Второй читаемый слой URL2 после сверки реквизитов и заголовка страницы.",
+    },
+    {
+        "rank": 5,
+        "role": "Readable URL2 candidates",
+        "domains": ["normativ.kontur.ru"],
+        "usage": "Третий читаемый слой URL2 для добора подтвержденных документов.",
+    },
+    {
+        "rank": 6,
+        "role": "Readable URL2 candidates",
+        "domains": ["legalacts.ru"],
+        "usage": "Четвертый читаемый слой URL2 для новых документов без повторов.",
+    },
+    {
+        "rank": 7,
+        "role": "Readable URL2 candidates",
+        "domains": ["rulaws.ru"],
+        "usage": "Пятый читаемый слой URL2 для каскадного добора.",
+    },
+    {
+        "rank": 8,
+        "role": "Readable URL2 candidates",
+        "domains": ["bazanpa.ru", "xn--h1apee0d.xn--p1ai"],
+        "usage": "Шестой читаемый слой URL2 для финального добора при сохранении сверки реквизитов и заголовка.",
     },
 ]
 
@@ -1967,7 +1997,7 @@ def build_part_02_queries(run_workspace: SubtopicRunWorkspace) -> list[dict[str,
         "q01",
         "exact_phrase",
         f"\"{title}\" нотариус",
-        ["publication.pravo.gov.ru", "pravo.gov.ru", "consultant.ru", "garant.ru"],
+        ["publication.pravo.gov.ru", "pravo.gov.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru", "bazanpa.ru"],
         "Стартовый точный поиск по полной формулировке подтемы.",
     )
     add_query(
@@ -1980,15 +2010,15 @@ def build_part_02_queries(run_workspace: SubtopicRunWorkspace) -> list[dict[str,
     add_query(
         "q03",
         "readable_url2",
-        f"\"{title}\" site:consultant.ru OR site:garant.ru OR site:docs.cntd.ru",
-        ["consultant.ru", "garant.ru", "docs.cntd.ru"],
+        f"\"{title}\" site:consultant.ru OR site:base.garant.ru OR site:normativ.kontur.ru OR site:legalacts.ru OR site:rulaws.ru OR site:bazanpa.ru OR site:xn--h1apee0d.xn--p1ai",
+        ["consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru", "bazanpa.ru", "xn--h1apee0d.xn--p1ai"],
         "Подбирать читаемый VERIFIED URL2 для усиления карточки только после сверки реквизитов.",
     )
     add_query(
         "q04",
         "notariat_basics",
         f"\"{query_focus}\" \"Основы законодательства Российской Федерации о нотариате\"",
-        ["pravo.gov.ru", "consultant.ru", "garant.ru"],
+        ["pravo.gov.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru"],
         "Проверить профильный базовый слой нотариального регулирования.",
     )
     add_query(
@@ -2009,7 +2039,7 @@ def build_part_02_queries(run_workspace: SubtopicRunWorkspace) -> list[dict[str,
         "q07",
         "court_clarifications",
         f"\"{query_focus}\" нотариус обзор практика пленум",
-        ["vsrf.ru", "consultant.ru", "garant.ru"],
+        ["vsrf.ru", "consultant.ru", "base.garant.ru", "legalacts.ru", "rulaws.ru"],
         "Проверить применимые разъяснения и обзоры судебной практики.",
     )
 
@@ -2018,28 +2048,28 @@ def build_part_02_queries(run_workspace: SubtopicRunWorkspace) -> list[dict[str,
             "q08",
             "tariff_direct",
             f"\"{query_focus}\" \"федеральный тариф\" \"региональный тариф\" нотариус",
-            ["pravo.gov.ru", "notariat.ru", "consultant.ru", "garant.ru"],
+            ["pravo.gov.ru", "notariat.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru"],
             "Основной поисковый блок по федеральному и региональному тарифу.",
         )
         add_query(
             "q09",
             "tariff_article_22_1",
             f"\"{query_focus}\" \"22.1\" нотариат",
-            ["pravo.gov.ru", "consultant.ru", "garant.ru"],
+            ["pravo.gov.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru"],
             "Проверить профильные нормы Основ законодательства о нотариате и смежных актов.",
         )
         add_query(
             "q10",
             "tariff_state_duty",
             f"\"{query_focus}\" \"государственная пошлина\" нотариус",
-            ["nalog.gov.ru", "pravo.gov.ru", "consultant.ru", "garant.ru"],
+            ["nalog.gov.ru", "pravo.gov.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru"],
             "Налогово-финансовый слой, если он влияет на расчет.",
         )
         add_query(
             "q11",
             "tariff_regional_layer",
             f"\"{query_focus}\" \"предельные размеры регионального тарифа\" нотариус",
-            ["notariat.ru", "consultant.ru", "garant.ru"],
+            ["notariat.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru", "bazanpa.ru"],
             "Проверить региональный тариф и решения органов нотариального сообщества.",
         )
     else:
@@ -2047,28 +2077,28 @@ def build_part_02_queries(run_workspace: SubtopicRunWorkspace) -> list[dict[str,
             "q08",
             "procedure_variants",
             f"\"{query_focus}\" порядок совершения нотариального действия",
-            ["pravo.gov.ru", "minjust.gov.ru", "consultant.ru", "garant.ru"],
+            ["pravo.gov.ru", "minjust.gov.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru"],
             "Уточнить процедуру, участников, сроки и ограничения по действию.",
         )
         add_query(
             "q09",
             "forms_registers",
             f"\"{query_focus}\" форма реестр нотариус",
-            ["minjust.gov.ru", "notariat.ru", "consultant.ru", "garant.ru"],
+            ["minjust.gov.ru", "notariat.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru"],
             "Проверить формы, реестровый, делопроизводственный и учетный слой.",
         )
         add_query(
             "q10",
             "amendment_chain",
             f"\"{query_focus}\" приказ Минюста изменения 2024 2025 156 226 224 225",
-            ["publication.pravo.gov.ru", "rg.ru", "consultant.ru", "garant.ru"],
+            ["publication.pravo.gov.ru", "rg.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru"],
             "Добрать редакционную цепочку и свежие приказы об изменениях к базовым приказам Минюста.",
         )
         add_query(
             "q11",
             "latest_official_updates",
             f"\"{query_focus}\" актуальная редакция приказ Минюста нотариат 2025",
-            ["publication.pravo.gov.ru", "pravo.gov.ru", "rg.ru", "consultant.ru", "garant.ru"],
+            ["publication.pravo.gov.ru", "pravo.gov.ru", "rg.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru", "bazanpa.ru"],
             "Проверить свежие официально опубликованные обновления и редакции по теме.",
         )
 
