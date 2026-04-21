@@ -5618,6 +5618,8 @@ def part_03_block_is_explicitly_not_applicable(block_text: str) -> bool:
     lowered = block_text.lower()
     negative_markers = [
         "статус: не выявлено",
+        "статус: новых прямых документов не выявлено",
+        "статус: новых документов не выявлено",
         "не применяется",
         "не применим",
         "не применима",
