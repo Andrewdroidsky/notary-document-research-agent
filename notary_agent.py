@@ -8203,8 +8203,146 @@ def cmd_capture_part_output(args: argparse.Namespace) -> int:
     return 0
 
 
+# Canonical skeleton for Part 4 — 18 organs from Приказ §3.1.
+# The agent MUST fill content under each heading; headings themselves are frozen.
+_PART4_SKELETON = """\
+## 1. Росфинмониторинг
+
+<!-- карточки документов или: не выявлено -->
+
+## 2. Банк России
+
+<!-- карточки документов или: не выявлено -->
+
+## 3. Акты Федеральной Нотариальной Палаты
+
+<!-- карточки документов или: не выявлено -->
+
+## 4. Акты нотариальных палат субъектов
+
+<!-- карточки документов или: не выявлено -->
+
+## 5. Методические материалы/рекомендации (в составе акта ФНП)
+
+<!-- карточки документов или: не выявлено -->
+
+## 6. Росреестр
+
+<!-- карточки документов или: не выявлено -->
+
+## 7. Федеральная налоговая служба
+
+<!-- карточки документов или: не выявлено -->
+
+## 8. Минюст РФ/терорганы
+
+<!-- карточки документов или: не выявлено -->
+
+## 9. МВД
+
+<!-- карточки документов или: не выявлено -->
+
+## 10. Минфин
+
+<!-- карточки документов или: не выявлено -->
+
+## 11. ФОИВ (Федеральные органы исполнительной власти)
+
+<!-- карточки документов или: не выявлено -->
+
+## 12. Правительство РФ
+
+<!-- карточки документов или: не выявлено -->
+
+## 13. Президент РФ
+
+<!-- карточки документов или: не выявлено -->
+
+## 14. ГОСТ/Росстандарт
+
+<!-- карточки документов или: не выявлено -->
+
+## 15. Архивные правила
+
+<!-- карточки документов или: не выявлено -->
+
+## 16. Персональные данные/ИБ
+
+<!-- карточки документов или: не выявлено -->
+
+## 17. Электронная подпись
+
+<!-- карточки документов или: не выявлено -->
+
+## 18. Иное
+
+<!-- карточки документов или: не выявлено -->
+"""
+
+# Canonical skeleton for Part 5 — 6 layers from Приказ §6.1.
+_PART5_SKELETON = """\
+## слой 1: базовые кодексы/законы
+
+<!-- карточки документов или: не выявлено -->
+
+## слой 2: специальное нотариальное регулирование
+
+<!-- карточки документов или: не выявлено -->
+
+## слой 3: процессуальный/контрольный слой
+
+<!-- карточки документов или: не выявлено -->
+
+## слой 4: подзаконные НПА уполномоченных органов
+
+<!-- карточки документов или: не выявлено -->
+
+## слой 5: акты нотариального сообщества
+
+<!-- карточки документов или: не выявлено -->
+
+## слой 6: судебные разъяснения
+
+<!-- карточки документов или: не выявлено -->
+"""
+
+# Validation markers — promote-draft checks these strings are present in the draft.
+_PART4_REQUIRED_HEADINGS = [
+    "## 1. Росфинмониторинг",
+    "## 2. Банк России",
+    "## 3. Акты Федеральной Нотариальной Палаты",
+    "## 4. Акты нотариальных палат субъектов",
+    "## 5. Методические материалы/рекомендации (в составе акта ФНП)",
+    "## 6. Росреестр",
+    "## 7. Федеральная налоговая служба",
+    "## 8. Минюст РФ/терорганы",
+    "## 9. МВД",
+    "## 10. Минфин",
+    "## 11. ФОИВ (Федеральные органы исполнительной власти)",
+    "## 12. Правительство РФ",
+    "## 13. Президент РФ",
+    "## 14. ГОСТ/Росстандарт",
+    "## 15. Архивные правила",
+    "## 16. Персональные данные/ИБ",
+    "## 17. Электронная подпись",
+    "## 18. Иное",
+]
+
+_PART5_REQUIRED_HEADINGS = [
+    "## слой 1:",
+    "## слой 2:",
+    "## слой 3:",
+    "## слой 4:",
+    "## слой 5:",
+    "## слой 6:",
+]
+
+
 def _auto_init_part_drafts(run_workspace: "SubtopicRunWorkspace") -> None:
     """Pre-seed draft-part-NN.md files for Parts 2–9 with [WEBFETCH-ДЕКЛАРАЦИЯ].
+
+    Parts 4 and 5 also receive their canonical structural skeletons so the agent
+    cannot invent alternative headings — the frozen structure is already in the file.
 
     Called automatically by prepare-part-02-web so the files exist with the
     mandatory opening marker before the agent writes any cards. This removes
@@ -8214,18 +8352,22 @@ def _auto_init_part_drafts(run_workspace: "SubtopicRunWorkspace") -> None:
         "[WEBFETCH-ДЕКЛАРАЦИЯ] Начинаю поиск документов по теме. Все URL2 получаю через\n"
         "web_fetch с реальных страниц. Ни одна ссылка не будет сконструирована из памяти модели.\n\n"
     )
+    skeletons: dict[int, str] = {4: _PART4_SKELETON, 5: _PART5_SKELETON}
     for part_number in range(2, 10):
         draft_path = run_workspace.web_plan_dir / f"draft-part-{part_number:02d}.md"
+        skeleton = skeletons.get(part_number, "")
+        seed_content = declaration + skeleton
         if draft_path.exists():
             content = draft_path.read_text(encoding="utf-8")
             if "[WEBFETCH-ДЕКЛАРАЦИЯ]" in content:
                 continue  # already initialized
-            # File exists without marker — prepend it
+            # File exists without marker — prepend declaration (keep existing content)
             draft_path.write_text(declaration + content, encoding="utf-8")
             print(f"[auto-init-drafts] Prepended [WEBFETCH-ДЕКЛАРАЦИЯ] to existing {draft_path.name}")
         else:
-            draft_path.write_text(declaration, encoding="utf-8")
-            print(f"[auto-init-drafts] Created {draft_path.name} with [WEBFETCH-ДЕКЛАРАЦИЯ]")
+            draft_path.write_text(seed_content, encoding="utf-8")
+            label = " + skeleton" if skeleton else ""
+            print(f"[auto-init-drafts] Created {draft_path.name} with [WEBFETCH-ДЕКЛАРАЦИЯ]{label}")
 
 
 def cmd_prepare_part_02_web(args: argparse.Namespace) -> int:
@@ -8605,10 +8747,15 @@ def cmd_init_part_draft(args: argparse.Namespace) -> int:
         "[WEBFETCH-ДЕКЛАРАЦИЯ] Начинаю поиск документов по теме. Все URL2 получаю через\n"
         "web_fetch с реальных страниц. Ни одна ссылка не будет сконструирована из памяти модели.\n\n"
     )
-    draft_path.write_text(declaration, encoding="utf-8")
+    skeletons: dict[int, str] = {4: _PART4_SKELETON, 5: _PART5_SKELETON}
+    skeleton = skeletons.get(part_number, "")
+    draft_path.write_text(declaration + skeleton, encoding="utf-8")
     print(f"[init-part-draft] Создан: {draft_path}")
     print(f"[init-part-draft] [WEBFETCH-ДЕКЛАРАЦИЯ] вписана в первую строку.")
-    print(f"[init-part-draft] Дописывай карточки в этот файл через Write/Edit tool.")
+    if skeleton:
+        print(f"[init-part-draft] Канонический скелет Части {part_number} вставлен — заполняй карточки под каждым заголовком.")
+    else:
+        print(f"[init-part-draft] Дописывай карточки в этот файл через Write/Edit tool.")
     return 0
 
 
@@ -8872,6 +9019,26 @@ def cmd_promote_draft(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 1
+
+    # Structural skeleton validation for Parts 4 and 5.
+    skeleton_checks: dict[int, list[str]] = {
+        4: _PART4_REQUIRED_HEADINGS,
+        5: _PART5_REQUIRED_HEADINGS,
+    }
+    if part_number in skeleton_checks:
+        content = draft_path.read_text(encoding="utf-8")
+        required = skeleton_checks[part_number]
+        missing = [h for h in required if h not in content]
+        if missing:
+            print(
+                f"ERROR [promote-draft] Часть {part_number}: отсутствуют обязательные заголовки структуры.\n"
+                f"Пропущено {len(missing)} из {len(required)} пунктов:\n"
+                + "\n".join(f"  — {h}" for h in missing)
+                + f"\n\nДобавь недостающие разделы в {draft_path.name} и повтори promote-draft.",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"[promote-draft] Структура Части {part_number}: все {len(required)} заголовков присутствуют. OK.")
 
     args.source_file = str(draft_path)
     args.clipboard = False
