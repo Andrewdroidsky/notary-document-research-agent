@@ -315,6 +315,20 @@ Fetch-and-log на 5 карточек = ~2 минуты. Переделка Ча
   ВЕРНО:   URL2: `https://www.consultant.ru/document/cons_doc_LAW_39570/cabd43bd.../`
 fetch-and-log вернёт заголовок статьи — вставь его в «Заголовок страницы URL2».
 
+КРИТИЧЕСКОЕ ПРАВИЛО — 1 fetch-and-log = 1 карточка:
+URL2 и «Заголовок страницы URL2» в каждой карточке берутся ТОЛЬКО из результата
+fetch-and-log, выполненного для этого конкретного документа прямо сейчас.
+ЗАПРЕЩЕНО:
+- брать URL2 из памяти или из контекста предыдущей карточки;
+- копировать URL2 от похожего документа или соседней карточки;
+- подставлять URL2 «на глаз» без предшествующего fetch-and-log для этого документа.
+
+Сверка реквизитов — обязательная проверка перед записью VERIFIED URL2: ДА:
+Заголовок страницы (из fetch-and-log) совпадает с наименованием акта в карточке?
+- Совпадает → VERIFIED URL2: ДА
+- Не совпадает → VERIFIED URL2: НЕТ; в поле «Сверка реквизитов» указать расхождение явно.
+Нельзя писать VERIFIED URL2: ДА если заголовок страницы не соответствует наименованию.
+
 Эти маркеры должны присутствовать ВНУТРИ текста Части — не как отдельные
 сообщения в чат, а прямо в теле ответа между блоками карточек. Они попадают
 в захват и проверяются автоматически. Отсутствие маркеров = блокировка захвата.
@@ -387,8 +401,38 @@ PART_02_SOURCE_CASCADE = [
     {
         "rank": 3,
         "role": "Readable URL2 candidates",
-        "domains": ["consultant.ru", "garant.ru", "docs.cntd.ru"],
-        "usage": "Читаемые источники для VERIFIED URL2 после сверки реквизитов и заголовка страницы.",
+        "domains": ["consultant.ru"],
+        "usage": "Первый читаемый слой URL2 после официальных источников.",
+    },
+    {
+        "rank": 4,
+        "role": "Readable URL2 candidates",
+        "domains": ["base.garant.ru"],
+        "usage": "Второй читаемый слой URL2 после сверки реквизитов и заголовка страницы.",
+    },
+    {
+        "rank": 5,
+        "role": "Readable URL2 candidates",
+        "domains": ["normativ.kontur.ru"],
+        "usage": "Третий читаемый слой URL2 для добора подтвержденных документов.",
+    },
+    {
+        "rank": 6,
+        "role": "Readable URL2 candidates",
+        "domains": ["legalacts.ru"],
+        "usage": "Четвертый читаемый слой URL2 для новых документов без повторов.",
+    },
+    {
+        "rank": 7,
+        "role": "Readable URL2 candidates",
+        "domains": ["rulaws.ru"],
+        "usage": "Пятый читаемый слой URL2 для каскадного добора.",
+    },
+    {
+        "rank": 8,
+        "role": "Readable URL2 candidates",
+        "domains": ["bazanpa.ru", "xn--h1apee0d.xn--p1ai"],
+        "usage": "Шестой читаемый слой URL2 для финального добора при сохранении сверки реквизитов и заголовка.",
     },
 ]
 
@@ -1953,7 +1997,7 @@ def build_part_02_queries(run_workspace: SubtopicRunWorkspace) -> list[dict[str,
         "q01",
         "exact_phrase",
         f"\"{title}\" нотариус",
-        ["publication.pravo.gov.ru", "pravo.gov.ru", "consultant.ru", "garant.ru"],
+        ["publication.pravo.gov.ru", "pravo.gov.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru", "bazanpa.ru"],
         "Стартовый точный поиск по полной формулировке подтемы.",
     )
     add_query(
@@ -1966,15 +2010,15 @@ def build_part_02_queries(run_workspace: SubtopicRunWorkspace) -> list[dict[str,
     add_query(
         "q03",
         "readable_url2",
-        f"\"{title}\" site:consultant.ru OR site:garant.ru OR site:docs.cntd.ru",
-        ["consultant.ru", "garant.ru", "docs.cntd.ru"],
+        f"\"{title}\" site:consultant.ru OR site:base.garant.ru OR site:normativ.kontur.ru OR site:legalacts.ru OR site:rulaws.ru OR site:bazanpa.ru OR site:xn--h1apee0d.xn--p1ai",
+        ["consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru", "bazanpa.ru", "xn--h1apee0d.xn--p1ai"],
         "Подбирать читаемый VERIFIED URL2 для усиления карточки только после сверки реквизитов.",
     )
     add_query(
         "q04",
         "notariat_basics",
         f"\"{query_focus}\" \"Основы законодательства Российской Федерации о нотариате\"",
-        ["pravo.gov.ru", "consultant.ru", "garant.ru"],
+        ["pravo.gov.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru"],
         "Проверить профильный базовый слой нотариального регулирования.",
     )
     add_query(
@@ -1995,7 +2039,7 @@ def build_part_02_queries(run_workspace: SubtopicRunWorkspace) -> list[dict[str,
         "q07",
         "court_clarifications",
         f"\"{query_focus}\" нотариус обзор практика пленум",
-        ["vsrf.ru", "consultant.ru", "garant.ru"],
+        ["vsrf.ru", "consultant.ru", "base.garant.ru", "legalacts.ru", "rulaws.ru"],
         "Проверить применимые разъяснения и обзоры судебной практики.",
     )
 
@@ -2004,28 +2048,28 @@ def build_part_02_queries(run_workspace: SubtopicRunWorkspace) -> list[dict[str,
             "q08",
             "tariff_direct",
             f"\"{query_focus}\" \"федеральный тариф\" \"региональный тариф\" нотариус",
-            ["pravo.gov.ru", "notariat.ru", "consultant.ru", "garant.ru"],
+            ["pravo.gov.ru", "notariat.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru"],
             "Основной поисковый блок по федеральному и региональному тарифу.",
         )
         add_query(
             "q09",
             "tariff_article_22_1",
             f"\"{query_focus}\" \"22.1\" нотариат",
-            ["pravo.gov.ru", "consultant.ru", "garant.ru"],
+            ["pravo.gov.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru"],
             "Проверить профильные нормы Основ законодательства о нотариате и смежных актов.",
         )
         add_query(
             "q10",
             "tariff_state_duty",
             f"\"{query_focus}\" \"государственная пошлина\" нотариус",
-            ["nalog.gov.ru", "pravo.gov.ru", "consultant.ru", "garant.ru"],
+            ["nalog.gov.ru", "pravo.gov.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru"],
             "Налогово-финансовый слой, если он влияет на расчет.",
         )
         add_query(
             "q11",
             "tariff_regional_layer",
             f"\"{query_focus}\" \"предельные размеры регионального тарифа\" нотариус",
-            ["notariat.ru", "consultant.ru", "garant.ru"],
+            ["notariat.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru", "bazanpa.ru"],
             "Проверить региональный тариф и решения органов нотариального сообщества.",
         )
     else:
@@ -2033,28 +2077,28 @@ def build_part_02_queries(run_workspace: SubtopicRunWorkspace) -> list[dict[str,
             "q08",
             "procedure_variants",
             f"\"{query_focus}\" порядок совершения нотариального действия",
-            ["pravo.gov.ru", "minjust.gov.ru", "consultant.ru", "garant.ru"],
+            ["pravo.gov.ru", "minjust.gov.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru"],
             "Уточнить процедуру, участников, сроки и ограничения по действию.",
         )
         add_query(
             "q09",
             "forms_registers",
             f"\"{query_focus}\" форма реестр нотариус",
-            ["minjust.gov.ru", "notariat.ru", "consultant.ru", "garant.ru"],
+            ["minjust.gov.ru", "notariat.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru"],
             "Проверить формы, реестровый, делопроизводственный и учетный слой.",
         )
         add_query(
             "q10",
             "amendment_chain",
             f"\"{query_focus}\" приказ Минюста изменения 2024 2025 156 226 224 225",
-            ["publication.pravo.gov.ru", "rg.ru", "consultant.ru", "garant.ru"],
+            ["publication.pravo.gov.ru", "rg.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru"],
             "Добрать редакционную цепочку и свежие приказы об изменениях к базовым приказам Минюста.",
         )
         add_query(
             "q11",
             "latest_official_updates",
             f"\"{query_focus}\" актуальная редакция приказ Минюста нотариат 2025",
-            ["publication.pravo.gov.ru", "pravo.gov.ru", "rg.ru", "consultant.ru", "garant.ru"],
+            ["publication.pravo.gov.ru", "pravo.gov.ru", "rg.ru", "consultant.ru", "base.garant.ru", "normativ.kontur.ru", "legalacts.ru", "rulaws.ru", "bazanpa.ru"],
             "Проверить свежие официально опубликованные обновления и редакции по теме.",
         )
 
@@ -3431,7 +3475,13 @@ def build_followup_part_packet(run_workspace: SubtopicRunWorkspace, part_number:
     elif part_number == 10:
         lines.insert(
             5,
-            "- Для Части 10 после каждого пункта давать копируемые ссылочные code-блоки с полным наименованием документа и структурным элементом.",
+            (
+                "- Для Части 10 после каждого пункта давать копируемые ссылочные блоки с полным наименованием документа, структурным элементом, URL1, URL2.\n"
+                "- URL2 и «Заголовок страницы URL2» для каждого документа берутся ТОЛЬКО из результата fetch-and-log, "
+                "выполненного для этого конкретного документа. Запрещено копировать URL2 из соседнего блока или из памяти.\n"
+                "- Сверка реквизитов: заголовок страницы (из fetch-and-log) совпадает с наименованием акта? "
+                "Совпадает → VERIFIED URL2: ДА. Не совпадает → VERIFIED URL2: НЕТ, расхождение указать явно."
+            ),
         )
     else:
         lines.insert(
@@ -5568,6 +5618,8 @@ def part_03_block_is_explicitly_not_applicable(block_text: str) -> bool:
     lowered = block_text.lower()
     negative_markers = [
         "статус: не выявлено",
+        "статус: новых прямых документов не выявлено",
+        "статус: новых документов не выявлено",
         "не применяется",
         "не применим",
         "не применима",
@@ -7920,6 +7972,12 @@ def cmd_assemble_subtopic_final(args: argparse.Namespace) -> int:
         theme_query=args.theme_query,
     )
     assert_run_command_allowed(run_workspace, "assemble-subtopic-final")
+    if not args.publish and not getattr(args, "allow_unpublished_assemble", False):
+        raise RuntimeError(
+            "assemble-subtopic-final without --publish is blocked to prevent accidental non-published finals. "
+            "Use --publish for the canonical final output in 04-output, or pass --allow-unpublished-assemble "
+            "only when you intentionally need a local preview in 03-final."
+        )
     if args.publish:
         assembled_md = assemble_subtopic_final(run_workspace, publish=False, force=bool(args.force))
         assembled_text = read_text(assembled_md)
@@ -8147,8 +8205,146 @@ def cmd_capture_part_output(args: argparse.Namespace) -> int:
     return 0
 
 
+# Canonical skeleton for Part 4 — 18 organs from Приказ §3.1.
+# The agent MUST fill content under each heading; headings themselves are frozen.
+_PART4_SKELETON = """\
+## 1. Росфинмониторинг
+
+<!-- карточки документов или: не выявлено -->
+
+## 2. Банк России
+
+<!-- карточки документов или: не выявлено -->
+
+## 3. Акты Федеральной Нотариальной Палаты
+
+<!-- карточки документов или: не выявлено -->
+
+## 4. Акты нотариальных палат субъектов
+
+<!-- карточки документов или: не выявлено -->
+
+## 5. Методические материалы/рекомендации (в составе акта ФНП)
+
+<!-- карточки документов или: не выявлено -->
+
+## 6. Росреестр
+
+<!-- карточки документов или: не выявлено -->
+
+## 7. Федеральная налоговая служба
+
+<!-- карточки документов или: не выявлено -->
+
+## 8. Минюст РФ/терорганы
+
+<!-- карточки документов или: не выявлено -->
+
+## 9. МВД
+
+<!-- карточки документов или: не выявлено -->
+
+## 10. Минфин
+
+<!-- карточки документов или: не выявлено -->
+
+## 11. ФОИВ (Федеральные органы исполнительной власти)
+
+<!-- карточки документов или: не выявлено -->
+
+## 12. Правительство РФ
+
+<!-- карточки документов или: не выявлено -->
+
+## 13. Президент РФ
+
+<!-- карточки документов или: не выявлено -->
+
+## 14. ГОСТ/Росстандарт
+
+<!-- карточки документов или: не выявлено -->
+
+## 15. Архивные правила
+
+<!-- карточки документов или: не выявлено -->
+
+## 16. Персональные данные/ИБ
+
+<!-- карточки документов или: не выявлено -->
+
+## 17. Электронная подпись
+
+<!-- карточки документов или: не выявлено -->
+
+## 18. Иное
+
+<!-- карточки документов или: не выявлено -->
+"""
+
+# Canonical skeleton for Part 5 — 6 layers from Приказ §6.1.
+_PART5_SKELETON = """\
+## слой 1: базовые кодексы/законы
+
+<!-- карточки документов или: не выявлено -->
+
+## слой 2: специальное нотариальное регулирование
+
+<!-- карточки документов или: не выявлено -->
+
+## слой 3: процессуальный/контрольный слой
+
+<!-- карточки документов или: не выявлено -->
+
+## слой 4: подзаконные НПА уполномоченных органов
+
+<!-- карточки документов или: не выявлено -->
+
+## слой 5: акты нотариального сообщества
+
+<!-- карточки документов или: не выявлено -->
+
+## слой 6: судебные разъяснения
+
+<!-- карточки документов или: не выявлено -->
+"""
+
+# Validation markers — promote-draft checks these strings are present in the draft.
+_PART4_REQUIRED_HEADINGS = [
+    "## 1. Росфинмониторинг",
+    "## 2. Банк России",
+    "## 3. Акты Федеральной Нотариальной Палаты",
+    "## 4. Акты нотариальных палат субъектов",
+    "## 5. Методические материалы/рекомендации (в составе акта ФНП)",
+    "## 6. Росреестр",
+    "## 7. Федеральная налоговая служба",
+    "## 8. Минюст РФ/терорганы",
+    "## 9. МВД",
+    "## 10. Минфин",
+    "## 11. ФОИВ (Федеральные органы исполнительной власти)",
+    "## 12. Правительство РФ",
+    "## 13. Президент РФ",
+    "## 14. ГОСТ/Росстандарт",
+    "## 15. Архивные правила",
+    "## 16. Персональные данные/ИБ",
+    "## 17. Электронная подпись",
+    "## 18. Иное",
+]
+
+_PART5_REQUIRED_HEADINGS = [
+    "## слой 1:",
+    "## слой 2:",
+    "## слой 3:",
+    "## слой 4:",
+    "## слой 5:",
+    "## слой 6:",
+]
+
+
 def _auto_init_part_drafts(run_workspace: "SubtopicRunWorkspace") -> None:
     """Pre-seed draft-part-NN.md files for Parts 2–9 with [WEBFETCH-ДЕКЛАРАЦИЯ].
+
+    Parts 4 and 5 also receive their canonical structural skeletons so the agent
+    cannot invent alternative headings — the frozen structure is already in the file.
 
     Called automatically by prepare-part-02-web so the files exist with the
     mandatory opening marker before the agent writes any cards. This removes
@@ -8158,18 +8354,22 @@ def _auto_init_part_drafts(run_workspace: "SubtopicRunWorkspace") -> None:
         "[WEBFETCH-ДЕКЛАРАЦИЯ] Начинаю поиск документов по теме. Все URL2 получаю через\n"
         "web_fetch с реальных страниц. Ни одна ссылка не будет сконструирована из памяти модели.\n\n"
     )
+    skeletons: dict[int, str] = {4: _PART4_SKELETON, 5: _PART5_SKELETON}
     for part_number in range(2, 10):
         draft_path = run_workspace.web_plan_dir / f"draft-part-{part_number:02d}.md"
+        skeleton = skeletons.get(part_number, "")
+        seed_content = declaration + skeleton
         if draft_path.exists():
             content = draft_path.read_text(encoding="utf-8")
             if "[WEBFETCH-ДЕКЛАРАЦИЯ]" in content:
                 continue  # already initialized
-            # File exists without marker — prepend it
+            # File exists without marker — prepend declaration (keep existing content)
             draft_path.write_text(declaration + content, encoding="utf-8")
             print(f"[auto-init-drafts] Prepended [WEBFETCH-ДЕКЛАРАЦИЯ] to existing {draft_path.name}")
         else:
-            draft_path.write_text(declaration, encoding="utf-8")
-            print(f"[auto-init-drafts] Created {draft_path.name} with [WEBFETCH-ДЕКЛАРАЦИЯ]")
+            draft_path.write_text(seed_content, encoding="utf-8")
+            label = " + skeleton" if skeleton else ""
+            print(f"[auto-init-drafts] Created {draft_path.name} with [WEBFETCH-ДЕКЛАРАЦИЯ]{label}")
 
 
 def cmd_prepare_part_02_web(args: argparse.Namespace) -> int:
@@ -8549,10 +8749,15 @@ def cmd_init_part_draft(args: argparse.Namespace) -> int:
         "[WEBFETCH-ДЕКЛАРАЦИЯ] Начинаю поиск документов по теме. Все URL2 получаю через\n"
         "web_fetch с реальных страниц. Ни одна ссылка не будет сконструирована из памяти модели.\n\n"
     )
-    draft_path.write_text(declaration, encoding="utf-8")
+    skeletons: dict[int, str] = {4: _PART4_SKELETON, 5: _PART5_SKELETON}
+    skeleton = skeletons.get(part_number, "")
+    draft_path.write_text(declaration + skeleton, encoding="utf-8")
     print(f"[init-part-draft] Создан: {draft_path}")
     print(f"[init-part-draft] [WEBFETCH-ДЕКЛАРАЦИЯ] вписана в первую строку.")
-    print(f"[init-part-draft] Дописывай карточки в этот файл через Write/Edit tool.")
+    if skeleton:
+        print(f"[init-part-draft] Канонический скелет Части {part_number} вставлен — заполняй карточки под каждым заголовком.")
+    else:
+        print(f"[init-part-draft] Дописывай карточки в этот файл через Write/Edit tool.")
     return 0
 
 
@@ -8662,9 +8867,15 @@ def cmd_fetch_and_log(args: argparse.Namespace) -> int:
     # Auto-write >>> ПОИСК: marker into the current part draft file.
     # This satisfies the 1:1 grounding check (check_search_grounding) without
     # relying on the agent to remember to write it manually.
-    # Find the latest draft-part-NN.md in the web_plan_dir.
+    # Find the active draft-part-NN.md in the web_plan_dir.
+    # Lexicographic sort picks draft-part-09.md whenever all placeholders exist,
+    # which is misleading for the operator and appends grounding markers to the
+    # wrong draft. Use the most recently modified draft instead.
     web_plan_dir = run_workspace.web_plan_dir
-    draft_files = sorted(web_plan_dir.glob("draft-part-[0-9][0-9].md"))
+    draft_files = sorted(
+        web_plan_dir.glob("draft-part-[0-9][0-9].md"),
+        key=lambda p: p.stat().st_mtime,
+    )
     if draft_files:
         active_draft = draft_files[-1]
         grounding_marker = f"\n>>> ПОИСК: {url[:120]}\n"
@@ -8811,6 +9022,26 @@ def cmd_promote_draft(args: argparse.Namespace) -> int:
             )
             return 1
 
+    # Structural skeleton validation for Parts 4 and 5.
+    skeleton_checks: dict[int, list[str]] = {
+        4: _PART4_REQUIRED_HEADINGS,
+        5: _PART5_REQUIRED_HEADINGS,
+    }
+    if part_number in skeleton_checks:
+        content = draft_path.read_text(encoding="utf-8")
+        required = skeleton_checks[part_number]
+        missing = [h for h in required if h not in content]
+        if missing:
+            print(
+                f"ERROR [promote-draft] Часть {part_number}: отсутствуют обязательные заголовки структуры.\n"
+                f"Пропущено {len(missing)} из {len(required)} пунктов:\n"
+                + "\n".join(f"  — {h}" for h in missing)
+                + f"\n\nДобавь недостающие разделы в {draft_path.name} и повтори promote-draft.",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"[promote-draft] Структура Части {part_number}: все {len(required)} заголовков присутствуют. OK.")
+
     args.source_file = str(draft_path)
     args.clipboard = False
     if not hasattr(args, "auto_assemble"):
@@ -8882,6 +9113,11 @@ def build_parser() -> argparse.ArgumentParser:
     assemble_subtopic_final_parser.add_argument("--theme-query")
     assemble_subtopic_final_parser.add_argument("--workspace-root", default=str(Path(__file__).parent))
     assemble_subtopic_final_parser.add_argument("--publish", action="store_true")
+    assemble_subtopic_final_parser.add_argument(
+        "--allow-unpublished-assemble",
+        action="store_true",
+        help="Explicitly allow preview-only assembly into 03-final without publishing to 04-output",
+    )
     assemble_subtopic_final_parser.add_argument(
         "--force",
         action="store_true",
