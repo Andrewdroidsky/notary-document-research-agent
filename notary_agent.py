@@ -5318,11 +5318,15 @@ def check_research_log_url_authenticity(research_log_path: Path, sample_size: in
                 continue
             try:
                 entry = json.loads(line)
-                # Skip agent-supplied entries: URL was verified by the agent's own
-                # web_fetch tool — local re-check via urllib would fail with WinError 10013
-                # and is redundant since the agent already confirmed the page exists.
-                if entry.get("agent_supplied"):
-                    continue
+                # agent_supplied entries are included in this sample too (as of
+                # 30.08.2026): the WinError 10013 that motivated skipping them was
+                # traced to the coding-agent sandbox's socket policy, not to
+                # urllib/python.exe specifically — confirmed by an out-of-sandbox
+                # rerun of the identical request succeeding. See AGENTS.md /
+                # fetch-protocol.md for the sandbox-approval requirement this
+                # restores. Independent re-fetch is not redundant with the agent's
+                # own web_fetch call — that is exactly the self-report this check
+                # exists to not trust on its own.
                 for field in ("url_fetched", "fetch_url", "url"):
                     val = entry.get(field, "")
                     if isinstance(val, str) and val.startswith("http"):
@@ -5331,7 +5335,7 @@ def check_research_log_url_authenticity(research_log_path: Path, sample_size: in
             except json.JSONDecodeError:
                 continue
     if not urls:
-        return []  # Only web_search query entries or agent_supplied entries — skip.
+        return []  # Only web_search query entries — skip.
     sample = random.sample(urls, min(sample_size, len(urls)))
     failed: list[str] = []
     for url in sample:
@@ -5409,11 +5413,8 @@ def check_research_log_timestamp_clustering(research_log_path: Path) -> list[str
                 continue
             try:
                 entry = json.loads(line)
-                # Skip agent-supplied entries: timestamps cluster by design (fast sequential
-                # fetch-and-log calls). This is not a fabrication signal — the agent used
-                # its built-in web_fetch tool which genuinely fetched each URL.
-                if entry.get("agent_supplied"):
-                    continue
+                # agent_supplied entries are included here too (as of 30.08.2026) —
+                # see the matching note in check_research_log_url_authenticity above.
                 ts_raw = entry.get("timestamp", "")
                 if not ts_raw:
                     continue
