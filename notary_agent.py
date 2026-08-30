@@ -4662,6 +4662,73 @@ def find_foreign_subtopic_ids(text: str, expected_subtopic_id: str) -> list[str]
     return sorted(candidate for candidate in candidates if candidate != expected_subtopic_id)
 
 
+def check_reasonable_absence_rule(content: str, research_log_path: Path) -> list[str]:
+    """Проверяет ПРАВИЛО ОБОСНОВАННОГО ОТСУТСТВИЯ.
+
+    Любое утверждение «не выявлено»/«не применимо»/«не найдено» должно быть
+    подтверждено реальным поиском в research-log.jsonl.
+
+    Ported from the Qwen branch of this project (same repo family) —
+    adapted to THIS branch's actual research-log schema: entries here mark
+    a real fetch via "url_fetched"/"fetch_url" (see check_research_log_url_
+    authenticity above), not via a "tool"+"fetched_by_agent" pair like the
+    Qwen branch uses. Do not copy the Qwen version verbatim into a branch
+    with a different log schema — it would silently block every valid
+    absence claim.
+
+    Возвращает список проблем или пустой список.
+    """
+    issues: list[str] = []
+    lowered = content.lower()
+
+    absence_markers = [
+        "не выявлено",
+        "не применимо",
+        "не найдено",
+        "отсутствуют документы",
+        "документы не выявлены",
+        "пуст",
+    ]
+
+    has_absence_claim = any(marker in lowered for marker in absence_markers)
+    if not has_absence_claim:
+        return issues
+
+    if not research_log_path.exists() or research_log_path.stat().st_size == 0:
+        issues.append(
+            "[reasonable-absence] БЛОК: в тексте есть утверждения об отсутствии документов "
+            "(«не выявлено»/«не применимо»/«не найдено»), но research-log.jsonl пуст или отсутствует. "
+            "Отсутствие результата должно быть доказано наличием процесса поиска."
+        )
+        return issues
+
+    search_count = 0
+    with open(research_log_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                for field in ("url_fetched", "fetch_url"):
+                    val = entry.get(field, "")
+                    if isinstance(val, str) and val.startswith("http"):
+                        search_count += 1
+                        break
+            except json.JSONDecodeError:
+                continue
+
+    if search_count == 0:
+        issues.append(
+            "[reasonable-absence] БЛОК: в тексте есть утверждения «не выявлено»/«не применимо»/«не найдено», "
+            "но в research-log нет записей реального поиска (url_fetched/fetch_url). "
+            "Писать «не выявлено» без предшествующей попытки поиска запрещено. "
+            "Отсутствие результата должно быть доказано наличием процесса поиска."
+        )
+
+    return issues
+
+
 def validate_part_output(run_workspace: SubtopicRunWorkspace, part_number: int, text: str) -> list[str]:
     issues: list[str] = []
     stripped = text.strip()
@@ -4716,6 +4783,10 @@ def validate_part_output(run_workspace: SubtopicRunWorkspace, part_number: int, 
             if not has_structural_element_marker(quarantine_block):
                 issues.append("Part 2 quarantine entries must include a structural element marker")
         issues.extend(validate_url2_presence_per_document_block(stripped, part_number))
+        # ПРАВИЛО ОБОСНОВАННОГО ОТСУТСТВИЯ
+        issues.extend(check_reasonable_absence_rule(
+            stripped, run_workspace.web_plan_dir / "research-log.jsonl"
+        ))
 
     if part_number == 3:
         issues.extend(validate_part_03_canonical_structure(stripped))
@@ -4726,6 +4797,10 @@ def validate_part_output(run_workspace: SubtopicRunWorkspace, part_number: int, 
             )
         issues.extend(validate_part_03_applicable_blocks_have_url2(stripped))
         issues.extend(validate_url2_presence_per_document_block(stripped, part_number))
+        # ПРАВИЛО ОБОСНОВАННОГО ОТСУТСТВИЯ
+        issues.extend(check_reasonable_absence_rule(
+            stripped, run_workspace.web_plan_dir / "research-log.jsonl"
+        ))
 
     if part_number == 4:
         status_count = stripped.count("Статус:")
@@ -4737,6 +4812,10 @@ def validate_part_output(run_workspace: SubtopicRunWorkspace, part_number: int, 
                 f"Part 4 with at least 3 `Статус:` markers must contain at least 3 `URL2:` lines; found only {url2_count}"
             )
         issues.extend(validate_url2_presence_per_document_block(stripped, part_number))
+        # ПРАВИЛО ОБОСНОВАННОГО ОТСУТСТВИЯ
+        issues.extend(check_reasonable_absence_rule(
+            stripped, run_workspace.web_plan_dir / "research-log.jsonl"
+        ))
 
     if part_number == 5:
         status_count = stripped.count("Статус:")
@@ -4746,6 +4825,10 @@ def validate_part_output(run_workspace: SubtopicRunWorkspace, part_number: int, 
         if status_count > 0 and url2_count == 0:
             issues.append("Part 5 with `Статус:` markers must contain at least one `URL2:` line")
         issues.extend(validate_url2_presence_per_document_block(stripped, part_number))
+        # ПРАВИЛО ОБОСНОВАННОГО ОТСУТСТВИЯ
+        issues.extend(check_reasonable_absence_rule(
+            stripped, run_workspace.web_plan_dir / "research-log.jsonl"
+        ))
 
     if part_number in {6, 7, 8, 9}:
         first_nonempty = next((line.strip() for line in stripped.splitlines() if line.strip()), "")
@@ -4782,6 +4865,10 @@ def validate_part_output(run_workspace: SubtopicRunWorkspace, part_number: int, 
                 elif not match.group(1).strip():
                     issues.append(f"Part {part_number} card #{index} has empty required field `{label}`")
         issues.extend(validate_url2_presence_per_document_block(stripped, part_number))
+        # ПРАВИЛО ОБОСНОВАННОГО ОТСУТСТВИЯ
+        issues.extend(check_reasonable_absence_rule(
+            stripped, run_workspace.web_plan_dir / "research-log.jsonl"
+        ))
 
     if part_number == 10:
         items = extract_top_level_arabic_items(stripped)
@@ -4799,6 +4886,10 @@ def validate_part_output(run_workspace: SubtopicRunWorkspace, part_number: int, 
         if part10_words > 2500:
             issues.append(f"Part 10 is too long: {part10_words} words, max 2500")
         issues.extend(validate_part_10_item_level_url2(stripped))
+        # ПРАВИЛО ОБОСНОВАННОГО ОТСУТСТВИЯ
+        issues.extend(check_reasonable_absence_rule(
+            stripped, run_workspace.web_plan_dir / "research-log.jsonl"
+        ))
 
     if part_number == 11:
         items = extract_top_level_arabic_items(stripped)
