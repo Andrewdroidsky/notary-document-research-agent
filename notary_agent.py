@@ -5451,6 +5451,130 @@ def check_structural_elements_content_support(content: str, part_number: int) ->
     return errors
 
 
+# ---------------------------------------------------------------------------
+# Freshness — same deterministic, no-LLM architecture as content-support
+# above, applied to a different self-reported card field. Master prompt
+# format (Промпт по поиску документов 18.md): "Статус: действует / утратил
+# силу / действует в редакции от [дата]" + "Актуальность редакции: подтверждена
+# на [дата проверки]" — both currently pure self-report, never cross-checked
+# against the page they cite (found 2026-09-06, same pattern as "Уровень
+# URL2" before it: a real field the master prompt already defines, just
+# never wired to any check).
+# ---------------------------------------------------------------------------
+
+_NEGATIVE_STATUS_MARKERS = [
+    "утратил силу", "утратила силу", "утратило силу",
+    "признан утратившим силу", "признана утратившей силу", "признано утратившим силу",
+    "не действует", "прекратил действие", "прекратила действие", "прекратило действие",
+    "отменен", "отменён", "отменена", "отменено",
+]
+
+
+def _parse_status_pairs(content: str) -> list[dict]:
+    """Extract URL2, document name and declared Статус from each card — same
+    backward-scan pattern as _parse_url2_pairs, reused for a different field
+    rather than re-implemented, so both stay in sync if the card layout changes.
+    """
+    lines = content.splitlines()
+    pairs: list[dict] = []
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not re.match(r"^URL2:\s*\S", stripped):
+            continue
+        url_raw = re.sub(r"^URL2:\s*", "", stripped).strip().strip("`").strip()
+        if not url_raw.startswith("http"):
+            continue
+        doc_name = ""
+        card_status = ""
+        for j in range(i - 1, max(i - 26, -1), -1):
+            s = lines[j].strip()
+            if not doc_name and s.startswith("Полное наименование:"):
+                doc_name = re.sub(r"^Полное наименование:\s*", "", s)
+            if not card_status and s.startswith("Статус:"):
+                card_status = re.sub(r"^Статус:\s*", "", s)
+            if doc_name and card_status:
+                break
+        pairs.append({"url2": url_raw, "doc_name": doc_name, "status": card_status})
+    return pairs
+
+
+def _status_claims_in_force(card_status: str) -> bool:
+    """True only for a card that positively claims the act is currently in
+    force ("действует" / "действует в редакции от ..."). A card that already
+    says утратил силу/не действует/etc. has nothing to contradict here — this
+    check exists to catch the OPPOSITE mismatch (claims in force, page says
+    otherwise), not to police cards that are already honest about repeal.
+    """
+    lowered = card_status.strip().lower()
+    if not lowered:
+        return False
+    if any(m in lowered for m in _NEGATIVE_STATUS_MARKERS):
+        return False
+    return "действует" in lowered
+
+
+def check_status_freshness(content: str, part_number: int) -> list[str]:
+    """Hard-blocking freshness check. For each card claiming its document is
+    currently in force, search the fetched page (same _fetch_page_text as
+    content-support, visible-text, not raw HTML) for an explicit marker that
+    it is NOT — "утратил силу", "не действует", etc. Found -> hard block with
+    a real excerpt around the marker, the same AGENTS.md cascade pointer, and
+    КАРАНТИН as the honest exit, per the same architecture as
+    check_structural_elements_content_support (no LLM, no new dependency —
+    OPENAI_API_KEY will never be configured in this project's real workflow).
+
+    Known limitation, accepted deliberately rather than solved with an LLM
+    call: a page showing amendment HISTORY can legitimately contain
+    "утратил силу" about a PAST redaction/paragraph while the document
+    overall remains in force today — this is a real false-positive risk, not
+    a hypothetical one. Same discipline as _struct_el_variants: this is a
+    starting heuristic to grow from real cases (tighten the marker list or
+    require proximity to the document's own name), not a claim of
+    completeness now.
+    """
+    import concurrent.futures
+
+    if part_number < 2 or part_number > 9:
+        return []
+
+    pairs = _parse_status_pairs(content)
+    pairs_in_force = [p for p in pairs if p.get("url2") and _status_claims_in_force(p.get("status", ""))]
+    if not pairs_in_force:
+        return []
+
+    def _check_one(pair: dict) -> str | None:
+        page_text, status = _fetch_page_text(pair["url2"])
+        if status != "ok" or not page_text:
+            return None  # Liveness is a separate axis; not this function's job.
+        lowered = page_text.lower()
+        found = next((m for m in _NEGATIVE_STATUS_MARKERS if m in lowered), None)
+        if not found:
+            return None
+        idx = lowered.find(found)
+        excerpt = page_text[max(0, idx - 150): idx + 150].strip()
+        return (
+            f"[freshness] БЛОК: карточка заявляет «Статус: {pair['status']}» (в силе), но реальная "
+            f"страница по URL2 содержит признак утраты силы («{found}»).\n"
+            f"  Полное наименование: {pair['doc_name'] or '—'}\n"
+            f"  URL2: {pair['url2']}\n"
+            f"  Фрагмент страницы рядом с найденным маркером:\n"
+            f"    ...{excerpt}...\n"
+            f"  Требуется реальная проверка: подтвердите действующую редакцию по каскаду источников "
+            f"AGENTS.md (КонсультантПлюс → Гарант → Норматив/Контур → Legalacts → Rulaws → официальный "
+            f"правовой портал) и обновите «Статус»/ссылку, либо переведите документ в `КАРАНТИН`, если "
+            f"актуальность подтвердить не удаётся. Если найденный маркер относится не к самому "
+            f"документу, а к упомянутой на странице истории прежних редакций — явно отметьте это в "
+            f"карточке («Актуальность редакции») вместо того, чтобы оставлять противоречие без ответа."
+        )
+
+    errors: list[str] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(_check_one, p): p for p in pairs_in_force}
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            if result:
+                errors.append(result)
+    return errors
 
 
 def check_url2_title_audit_at_capture(content: str, part_number: int) -> list[str]:
@@ -8438,11 +8562,14 @@ def cmd_capture_part_output(args: argparse.Namespace) -> int:
     if title_audit_errors:
         raise RuntimeError("\n".join(title_audit_errors))
     check_structural_elements_soft(content, part_number)
-    # Content-support stage 2 (judge-based, hard block) — only for the disputed
-    # subset stage 1 above could not confirm deterministically.
+    # Content-support stage 2 (deterministic, hard block) — only for the
+    # disputed subset stage 1 above could not confirm.
     content_support_errors = check_structural_elements_content_support(content, part_number)
     if content_support_errors:
         raise RuntimeError("\n".join(content_support_errors))
+    freshness_errors = check_status_freshness(content, part_number)
+    if freshness_errors:
+        raise RuntimeError("\n".join(freshness_errors))
 
     # Живая верификация URL2: Python сам открывает каждую ссылку и сравнивает
     # реальный <title> страницы с тем что агент написал в «Заголовок страницы URL2».
@@ -8757,6 +8884,9 @@ def cmd_capture_part_03_range(args: argparse.Namespace) -> int:
     content_support_errors = check_structural_elements_content_support(content, 3)
     if content_support_errors:
         raise RuntimeError("\n".join(content_support_errors))
+    freshness_errors = check_status_freshness(content, 3)
+    if freshness_errors:
+        raise RuntimeError("\n".join(freshness_errors))
 
     segment_output_path = get_part_03_segment_output_path(run_workspace, segment["segment_id"])
     write_text(segment_output_path, content.rstrip() + "\n")
@@ -8846,6 +8976,9 @@ def cmd_capture_part_04_range(args: argparse.Namespace) -> int:
     content_support_errors = check_structural_elements_content_support(content, 4)
     if content_support_errors:
         raise RuntimeError("\n".join(content_support_errors))
+    freshness_errors = check_status_freshness(content, 4)
+    if freshness_errors:
+        raise RuntimeError("\n".join(freshness_errors))
 
     segment_output_path = get_part_04_segment_output_path(run_workspace, segment["segment_id"])
     write_text(segment_output_path, content.rstrip() + "\n")
@@ -8934,6 +9067,9 @@ def cmd_capture_part_05_range(args: argparse.Namespace) -> int:
     content_support_errors = check_structural_elements_content_support(content, 5)
     if content_support_errors:
         raise RuntimeError("\n".join(content_support_errors))
+    freshness_errors = check_status_freshness(content, 5)
+    if freshness_errors:
+        raise RuntimeError("\n".join(freshness_errors))
 
     segment_output_path = get_part_05_segment_output_path(run_workspace, segment["segment_id"])
     write_text(segment_output_path, content.rstrip() + "\n")
