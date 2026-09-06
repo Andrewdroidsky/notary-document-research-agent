@@ -5469,6 +5469,39 @@ _NEGATIVE_STATUS_MARKERS = [
     "отменен", "отменён", "отменена", "отменено",
 ]
 
+# A marker immediately preceded by a reference to a specific sub-provision
+# ("Пункт 5 статьи 22 утратил силу") almost always describes ONE amendment
+# within a document that otherwise remains in force — the routine amendment-
+# history text these reference sites show, not a whole-act repeal. Only a
+# marker WITHOUT such a nearby reference ("Документ утратил силу", "Настоящий
+# закон утратил силу...") counts as a whole-document signal.
+_NEARBY_SUB_PROVISION_RE = re.compile(
+    r"(статья|стать[яи]|пункт[ае]?|част[ьи]|подпункт[ае]?|абзац\w*|раздел[а]?|глав[аы]|параграф[а]?)"
+    r"\s*\S{0,4}\s*\d",
+    re.IGNORECASE,
+)
+
+
+def _find_whole_document_repeal_marker(page_text_lower: str) -> tuple[str, int] | None:
+    """Scan for a negative-status marker that is NOT immediately preceded by a
+    reference to a specific sub-provision. Returns (marker, index) for the
+    first qualifying occurrence, or None. Checks every occurrence of every
+    marker (not just the first one found anywhere), since a page can mention
+    "Пункт 5 ... утратил силу" several times in its amendment history before
+    (or instead of) ever saying the document itself is repealed.
+    """
+    for marker in _NEGATIVE_STATUS_MARKERS:
+        start = 0
+        while True:
+            idx = page_text_lower.find(marker, start)
+            if idx == -1:
+                break
+            window = page_text_lower[max(0, idx - 80): idx]
+            if not _NEARBY_SUB_PROVISION_RE.search(window):
+                return (marker, idx)
+            start = idx + len(marker)
+    return None
+
 
 def _parse_status_pairs(content: str) -> list[dict]:
     """Extract URL2, document name and declared Статус from each card — same
@@ -5523,14 +5556,16 @@ def check_status_freshness(content: str, part_number: int) -> list[str]:
     check_structural_elements_content_support (no LLM, no new dependency —
     OPENAI_API_KEY will never be configured in this project's real workflow).
 
-    Known limitation, accepted deliberately rather than solved with an LLM
-    call: a page showing amendment HISTORY can legitimately contain
-    "утратил силу" about a PAST redaction/paragraph while the document
-    overall remains in force today — this is a real false-positive risk, not
-    a hypothetical one. Same discipline as _struct_el_variants: this is a
-    starting heuristic to grow from real cases (tighten the marker list or
-    require proximity to the document's own name), not a claim of
-    completeness now.
+    Amendment-history false positives (a page legitimately saying "Пункт 5
+    ... утратил силу" about ONE provision while the document overall remains
+    in force) are filtered deterministically by _find_whole_document_repeal_marker
+    — a marker immediately preceded by a "статья/пункт/часть N" reference is
+    treated as a sub-provision mention, not evidence of whole-document repeal.
+    This is a proximity heuristic, not a guarantee: a whole-document repeal
+    notice phrased unusually close to an unrelated article reference could
+    still slip through in either direction. Same discipline as
+    _struct_el_variants: grown from real cases as they turn up, not designed
+    exhaustively up front.
     """
     import concurrent.futures
 
@@ -5547,10 +5582,10 @@ def check_status_freshness(content: str, part_number: int) -> list[str]:
         if status != "ok" or not page_text:
             return None  # Liveness is a separate axis; not this function's job.
         lowered = page_text.lower()
-        found = next((m for m in _NEGATIVE_STATUS_MARKERS if m in lowered), None)
-        if not found:
+        hit = _find_whole_document_repeal_marker(lowered)
+        if hit is None:
             return None
-        idx = lowered.find(found)
+        found, idx = hit
         excerpt = page_text[max(0, idx - 150): idx + 150].strip()
         return (
             f"[freshness] БЛОК: карточка заявляет «Статус: {pair['status']}» (в силе), но реальная "
